@@ -17,6 +17,7 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+/credentials.json
 
 # Metro
 .metro-health-check*
@@ -41,4 +42,5 @@ yarn-error.*
 /android
 /modules/*/android/build/
 /modules/*/android/.cxx/
+/modules/*/android/.gradle/
 /builds/

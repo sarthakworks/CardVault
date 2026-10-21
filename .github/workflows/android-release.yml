@@ -1,0 +1,108 @@
+name: Android APK release
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Build and publish APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: write
+    env:
+      CI: '1'
+      EAS_PROJECT_ID: ${{ vars.EAS_PROJECT_ID }}
+    steps:
+      - name: Check out the pushed commit
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Check release setup
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [[ -z "$EXPO_TOKEN" ]]; then
+            echo "::error::Add the EXPO_TOKEN repository secret. See README.md: Automated APK releases."
+            exit 1
+          fi
+          if [[ -z "$EAS_PROJECT_ID" ]]; then
+            echo "::error::Add the EAS_PROJECT_ID repository variable and complete the initial signed EAS build. See README.md: Automated APK releases."
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check TypeScript and lint
+        run: npm run typecheck && npm run lint
+
+      - name: Set up EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: '25.2.0'
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build a signed standalone APK
+        run: |
+          eas build --platform android --profile release --non-interactive --wait --json > "$RUNNER_TEMP/eas-build.json"
+
+      - name: Read the finished APK version
+        id: apk
+        run: npx --no-install tsx scripts/prepare-apk-release.ts "$RUNNER_TEMP/eas-build.json"
+
+      - name: Download and checksum the APK
+        env:
+          ARTIFACT_URL: ${{ steps.apk.outputs.artifact_url }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/apk-release"
+          curl --fail --location --retry 3 --proto '=https' --proto-redir '=https' \
+            --output "$RUNNER_TEMP/apk-release/cardvault.apk" "$ARTIFACT_URL"
+          unzip -tq "$RUNNER_TEMP/apk-release/cardvault.apk"
+          unzip -Z -1 "$RUNNER_TEMP/apk-release/cardvault.apk" | grep -Fx 'AndroidManifest.xml'
+          cd "$RUNNER_TEMP/apk-release"
+          sha256sum cardvault.apk > SHA256SUMS.txt
+
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_TAG: ${{ steps.apk.outputs.tag }}
+          APP_VERSION: ${{ steps.apk.outputs.version }}
+          BUILD_NUMBER: ${{ steps.apk.outputs.build_number }}
+        run: |
+          release_flags=(--latest=false)
+          if [[ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]]; then
+            release_flags+=(--prerelease)
+          fi
+
+          release_url="$(gh release create "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Cardvault $APP_VERSION (build $BUILD_NUMBER)" \
+            --notes-file "$RUNNER_TEMP/apk-release-notes.md" \
+            "${release_flags[@]}" \
+            "$RUNNER_TEMP/apk-release/cardvault.apk" \
+            "$RUNNER_TEMP/apk-release/SHA256SUMS.txt")"
+
+          if [[ "$GITHUB_REF" == "refs/heads/$DEFAULT_BRANCH" ]]; then
+            latest_commit="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$DEFAULT_BRANCH" --jq '.object.sha')"
+            if [[ "$GITHUB_SHA" == "$latest_commit" ]]; then
+              gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --latest
+            fi
+          fi
+
+          printf '### Cardvault %s (build %s)\n\n[Download APK](%s/releases/download/%s/cardvault.apk)\n\n[View release](%s)\n' \
+            "$APP_VERSION" "$BUILD_NUMBER" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            "$RELEASE_TAG" "$release_url" >> "$GITHUB_STEP_SUMMARY"

@@ -1,11 +1,18 @@
 import 'tsx/cjs';
 import type { ExpoConfig } from 'expo/config';
+import { version } from './package.json';
 import withAndroidSecurity from './plugins/withAndroidSecurity';
+
+const easProjectId = process.env.EAS_PROJECT_ID ?? process.env.EAS_BUILD_PROJECT_ID;
+if (easProjectId !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(easProjectId)) {
+  throw new Error('EAS_PROJECT_ID must be the project UUID from the Expo dashboard.');
+}
 
 const config: ExpoConfig = {
   name: 'Cardvault',
   slug: 'cardvault',
-  version: '1.0.0',
+  version,
+  extra: easProjectId ? { eas: { projectId: easProjectId } } : undefined,
   platforms: ['android'],
   orientation: 'portrait',
   userInterfaceStyle: 'automatic',

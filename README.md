@@ -2,11 +2,64 @@
 
 An Android-only, offline credit-card and secure-notes vault built with Expo SDK 58, React Native, and strict TypeScript.
 
+[![Latest release](https://img.shields.io/github/v/release/sarthakworks/CardVault)](https://github.com/sarthakworks/CardVault/releases/latest)
+
+## Download an APK
+
+[Download the latest APK](https://github.com/sarthakworks/CardVault/releases/latest/download/cardvault.apk), or [browse all versions on GitHub Releases](https://github.com/sarthakworks/CardVault/releases). Open a release and download `cardvault.apk` from **Assets** to get that exact version. `SHA256SUMS.txt` accompanies each APK.
+
+Automated releases become available after the one-time setup below. Each release identifies both the app version and the unique Android build number, for example **Cardvault 1.0.0 (build 42)**, tagged `v1.0.0-build.42`. Non-default-branch and tag pushes produce prereleases; the current default-branch build is marked **Latest**.
+
+Install the standalone APK on an Android 10+ phone, allowing installation from that file's source when Android asks. Expo Go, a QR code, and a running development server are not required.
+
+**Export an encrypted backup before changing installations.** Android normally blocks installing a lower build number or updating an app signed with a different key. The previous locally built APK uses a development key and cannot be updated in place by a new EAS-signed release. If Android requires uninstalling, export first: uninstalling erases the local vault. Keep the backup password so you can import into the new installation.
+
+## Automated APK releases
+
+`.github/workflows/android-release.yml` builds and publishes an APK on **every push**, including branch and tag pushes. **Actions > Android APK release > Run workflow** also starts a build manually after the workflow is on the default branch. No pushes are cancelled in favor of newer builds, and previous releases remain downloadable.
+
+The workflow validates TypeScript and lint, waits for a signed EAS `release` build, verifies its platform/status/version/source commit, downloads the APK, and publishes it with a SHA-256 checksum. Failed builds do not publish a release. Releases point to the pushed commit, not whichever commit happens to be at the branch tip when the build finishes. Tags created by the workflow's `GITHUB_TOKEN` do not trigger another workflow run.
+
+### EAS Free plan
+
+Keep the Expo account that owns this project on the **Free ($0/month)** plan; confirm **Current Plan** in [Expo Billing](https://expo.dev/settings/billing) before starting builds. The `release` profile explicitly uses the Free-compatible **medium** Android worker. It does not require a paid subscription or a large worker.
+
+As of October 2026, the [Free plan](https://expo.dev/pricing) includes up to **15 Android builds per calendar month**, with a low-priority queue and a 45-minute build timeout. The initial signing/setup build and subsequent builds, including reruns and prereleases, use the same account's allowance. Building on every push can exhaust that allowance quickly.
+
+[Free accounts cannot incur overage charges](https://docs.expo.dev/billing/faq/#what-happens-when-i-use-up-the-free-plans-monthly-quota): after the quota is exhausted, new builds are unavailable until the first day of the next calendar month. The workflow fails without publishing a new release; existing releases stay available. It does not upgrade your plan, purchase extra builds, or fall back to a different build service.
+
+The Expo account's plan, not `eas.json`, controls billing. A medium worker is also available on paid plans, so this configuration is not a spending cap if you later upgrade the owning account. Monitor usage in Expo Billing and stay on Free to avoid EAS charges.
+
+### One-time setup
+
+1. Create a free [Expo account](https://expo.dev/signup), confirm its plan is **Free**, then create or link a **Cardvault** project in the [Expo dashboard](https://expo.dev). Copy its project UUID from the project settings. The project slug should be `cardvault`.
+2. Authenticate and complete an initial EAS build locally, allowing EAS to create or import a persistent Android signing keystore:
+
+   ```sh
+   npm ci
+   export EAS_PROJECT_ID='your-expo-project-uuid'
+   npx eas-cli@latest login
+   npx eas-cli@latest build --platform android --profile release
+   ```
+
+3. In this repository's **Settings > Secrets and variables > Actions**, add a repository **variable** named `EAS_PROJECT_ID` containing that UUID, and a repository **secret** named `EXPO_TOKEN` containing an [Expo access token](https://expo.dev/settings/access-tokens) with access to the project.
+4. Make sure repository/organization Actions policies permit this workflow's `contents: write` permission so `GITHUB_TOKEN` can create releases. Commit and push the workflow, or run it manually after setup.
+
+Signing credentials are managed by EAS and reused across builds; there is no fallback to the template's public development key. Preserve and securely back up the keystore: changing it prevents in-place updates. Never commit tokens, keystores, or `credentials.json`. Missing CI settings fail the workflow with a setup error rather than publishing an unsigned or development-signed APK.
+
+EAS cloud builds require an Expo account and available build quota; each accepted build request uses the account's allowance. GitHub Actions only orchestrates EAS and publishes the finished APK; it does not use EAS Workflows CI/CD minutes. These build-time services do not add network access, telemetry, or OTA updates to the installed app.
+
+### Versioning
+
+`package.json` is the source of the user-facing `major.minor.patch` version; `app.config.ts` reads it directly. Use `npm version patch --no-git-tag-version` (or `minor`/`major`) when intentionally changing that version, then commit both package files.
+
+EAS remotely increments `android.versionCode` for every build, including reruns and prereleases. CI does not commit version bumps or overwrite old releases, so there is no build/commit loop. Release tags combine the app version with the actual EAS build number. Only a successful build of the current default-branch tip updates **Latest**, so a slower, older build cannot replace a newer build.
+
 ## Run on Android
 
 Requirements: Node.js 24 LTS, Java 17, an Android SDK, and an Android 10+ device or emulator.
 
-An installable [arm64 APK](./builds/cardvault-1.0.0-arm64.apk) is available locally. It uses the template's local-development signing configuration, not a production distribution key.
+For an existing build, use [GitHub Releases](https://github.com/sarthakworks/CardVault/releases). Local native builds use the template's development signing configuration, not the persistent EAS distribution key.
 
 ```sh
 npm ci
@@ -22,7 +75,7 @@ Build tools need internet access when downloading dependencies. The installed re
 
 `Project is incompatible with this version of Expo Go` means the installed Expo Go runtime does not match this project's Expo SDK 58. A matching Expo Go version would still lack Cardvault's local Android security module, so upgrading Expo Go or changing SDK versions is not the supported solution.
 
-Install the standalone APK linked above directly on the phone, allowing installation from that file's source when Android asks. You do not need to run `npm run start` or scan a QR code for the standalone app.
+Install the standalone APK from GitHub Releases directly on the phone, allowing installation from that file's source when Android asks. You do not need to run `npm run start` or scan a QR code for the standalone app.
 
 Alternatively, connect the phone over USB with USB debugging enabled and run:
 
@@ -103,7 +156,7 @@ As requested, there are no authored unit/integration/E2E test cases or test-fram
 
 The native module is maintained under `modules/vault-security`. The generated `android` project is not the source of truth; `app.config.ts` and the config plugin regenerate it. The plugin fails explicitly if the expected Kotlin startup hook cannot be secured.
 
-The template release signing configuration is for local installation and verification. Configure your own release signing in a secure local build environment before distributing through Google Play. Do not commit signing keys or passwords.
+The template release signing configuration is for local installation and verification. Automated GitHub APK releases use the persistent EAS signing credentials configured above; the `release` profile produces an APK for direct installation, not a Google Play app bundle. Do not commit signing keys or passwords.
 
 ### Verified delivery
 
