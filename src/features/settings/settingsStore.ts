@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { z } from 'zod';
 import { readPreference, writePreference } from '../../core/storage/preferencesRepository';
+import { activeSession, assertGeneration } from '../../core/security/sessionStore';
+import { disableBiometricUnlock, enableBiometricUnlock } from '../../core/security/biometricKeyStore';
 
 export type ThemeMode = 'light' | 'dark';
 interface SettingsState {
@@ -27,4 +29,20 @@ export async function refreshSettings(): Promise<void> {
 export async function changeTheme(theme: ThemeMode): Promise<void> {
   await writePreference('theme', theme);
   useSettingsStore.setState({ theme });
+}
+
+export async function changeFingerprintUnlock(enabled: boolean): Promise<void> {
+  const session = activeSession();
+  if (enabled) {
+    const key = new Uint8Array(session.key);
+    try {
+      await enableBiometricUnlock(session.header.vaultId, key, session.generation);
+    } finally {
+      key.fill(0);
+    }
+  } else {
+    await disableBiometricUnlock();
+  }
+  assertGeneration(session.generation);
+  await refreshSettings();
 }

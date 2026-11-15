@@ -1,14 +1,11 @@
-import { AppState } from 'react-native';
+import { AppState, BackHandler } from 'react-native';
 import VaultSecurity from '../../../modules/vault-security';
 import { sessionKeyring } from './sessionKeyring';
 import { useSessionStore } from './sessionStore';
-import { clearAuthorizations } from './stepUpAuthorization';
 import { reportError } from '../errors/noticeStore';
-import { hasActiveBiometricPrompt } from './biometricPrompt';
 
 export function lockSession(): void {
   sessionKeyring.clear();
-  clearAuthorizations();
   useSessionStore.setState((state) => ({
     status: state.header ? 'locked' : state.status,
     snapshot: null,
@@ -20,17 +17,34 @@ export function lockSession(): void {
 }
 
 export function watchSessionLifecycle(onFocus: () => void): () => void {
+  let activitySessionId = VaultSecurity.getActivitySessionId();
+  function restoreFocus() {
+    const currentActivitySessionId = VaultSecurity.getActivitySessionId();
+    if (activitySessionId !== currentActivitySessionId) {
+      activitySessionId = currentActivitySessionId;
+      lockSession();
+    }
+    onFocus();
+  }
   const change = AppState.addEventListener('change', (state) => {
-    if (state !== 'active') lockSession();
-    else onFocus();
+    if (state === 'active') restoreFocus();
+    else void VaultSecurity.clearOwnedClipboard().catch(reportError);
   });
   const blur = AppState.addEventListener('blur', () => {
-    if (useSessionStore.getState().status === 'unlocked' && !hasActiveBiometricPrompt()) lockSession();
+    void VaultSecurity.clearOwnedClipboard().catch(reportError);
   });
-  const focus = AppState.addEventListener('focus', onFocus);
+  const focus = AppState.addEventListener('focus', restoreFocus);
+  const closed = VaultSecurity.addListener('onAppClosed', lockSession);
+  const back = BackHandler.addEventListener('hardwareBackPress', () => {
+    lockSession();
+    BackHandler.exitApp();
+    return true;
+  });
   return () => {
     change.remove();
     blur.remove();
     focus.remove();
+    closed.remove();
+    back.remove();
   };
 }

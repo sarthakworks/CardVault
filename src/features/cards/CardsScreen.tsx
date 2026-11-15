@@ -1,70 +1,200 @@
-import { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
+import { BackHandler, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import Feather from '@expo/vector-icons/Feather';
-import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
+import Animated, { Easing, FadeInDown, ReduceMotion, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSessionStore } from '../../core/security/sessionStore';
 import type { VaultCard } from '../../core/vault/models';
 import { Screen } from '../../shared/components/Screen';
-import { PageHeader } from '../../shared/components/PageHeader';
+import { BrandMark } from '../../shared/components/BrandMark';
 import { EmptyState } from '../../shared/components/EmptyState';
 import { Button } from '../../shared/components/Button';
 import { useTheme } from '../../shared/theme/ThemeProvider';
 import { typography } from '../../shared/theme/typography';
-import { CardFace } from './CardFace';
-import { CardFilters } from './CardFilters';
-import { CardDetailSheet } from './CardDetailSheet';
-import { CardEditorSheet } from './CardEditorSheet';
-import { initialCardFilter, selectCards } from './cardSelectors';
+import { useHaptics } from '../../shared/hooks/useHaptics';
+import type { DropdownPlacement } from '../../shared/components/Dropdown';
+import { CardFace, type CardActionDirection } from './CardFace';
+import { CardFilters, type CardMenuKind } from './CardFilters';
+import { CardFilterDropdown, type CardDropdownState } from './CardFilterDropdown';
+import { CardActionTray } from './CardActionMenu';
+import { cardFilterOptions, initialCardFilter, selectCards, type CardFilterOption } from './cardSelectors';
 
 const emptyCards: VaultCard[] = [];
 
-export function CardsScreen() {
+function optionLabel(options: CardFilterOption[], key: string | null): string | null {
+  return key === null ? null : options.find((option) => option.key === key)?.label ?? null;
+}
+
+type NativeAnchor = ComponentRef<typeof View>;
+type CollectionMenu = { type: 'filters'; value: CardDropdownState };
+type RevealedCard = { id: string; direction: CardActionDirection };
+const visibleSliver = 0.2;
+const trayGap = 12;
+
+function CardCollectionItem({ card, index, direction, onEdit, onReveal, onClose }: {
+  card: VaultCard;
+  index: number;
+  direction: CardActionDirection | null;
+  onEdit: (value: VaultCard) => void;
+  onReveal: (value: VaultCard, direction: CardActionDirection) => void;
+  onClose: () => void;
+}) {
+  const [width, setWidth] = useState(0);
+  const offset = useSharedValue(0);
+  const open = direction !== null;
+  useEffect(() => {
+    const target = open && width > 0 ? direction * width * (1 - visibleSliver) : 0;
+    offset.value = withTiming(target, { duration: open ? 320 : 240, easing: Easing.bezier(0.22, 1, 0.36, 1), reduceMotion: ReduceMotion.System });
+  }, [direction, offset, open, width]);
+  const cardMotion = useAnimatedStyle(() => ({ transform: [{ translateX: offset.value }] }));
+  const trayMotion = useAnimatedStyle(() => {
+    const progress = width > 0 ? Math.min(1, Math.abs(offset.value) / (width * (1 - visibleSliver))) : 0;
+    return { opacity: progress, transform: [{ scale: 0.94 + progress * 0.06 }] };
+  });
+  const showActions = useCallback((value: CardActionDirection) => onReveal(card, value), [card, onReveal]);
+  const traySide = direction === 1 ? { left: 0 } : { right: 0 };
+  return (
+    <Animated.View entering={FadeInDown.delay(Math.min(index, 5) * 45).duration(280).reduceMotion(ReduceMotion.System)} style={styles.cardItem}>
+      <View style={styles.cardSlot} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
+        {open ? (
+          <Animated.View style={[styles.tray, traySide, { width: Math.max(0, width * (1 - visibleSliver) - trayGap) }, trayMotion]}>
+            <CardActionTray card={card} onEdit={onEdit} onClose={onClose} />
+          </Animated.View>
+        ) : null}
+        <Animated.View style={cardMotion} importantForAccessibility={open ? 'no-hide-descendants' : 'auto'} accessibilityElementsHidden={open}>
+          <CardFace card={card} onActions={showActions} />
+        </Animated.View>
+        {open ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Close actions for ${card.bank} card ending ${card.number.slice(-4)}`}
+            onPress={onClose}
+            style={[styles.sliver, direction === 1 ? { right: 0 } : { left: 0 }, { width: width * visibleSliver }]}
+          />
+        ) : null}
+      </View>
+    </Animated.View>
+  );
+}
+
+export function CardsScreen({ onOpenCard }: { onOpenCard: (card: VaultCard | null) => void }) {
   const { colors } = useTheme();
+  const haptic = useHaptics();
   const cards = useSessionStore((state) => state.snapshot?.cards ?? emptyCards);
-  const [filter, setFilter] = useState(initialCardFilter);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editing, setEditing] = useState<VaultCard | null>(null);
+  const [selectedFilter, setFilter] = useState(initialCardFilter);
+  const options = useMemo(() => cardFilterOptions(cards), [cards]);
+  const filter = useMemo(() => ({
+    ...selectedFilter,
+    holder: optionLabel(options.holders, selectedFilter.holder) === null ? null : selectedFilter.holder,
+    bank: optionLabel(options.banks, selectedFilter.bank) === null ? null : selectedFilter.bank,
+    network: optionLabel(options.networks, selectedFilter.network) === null ? null : selectedFilter.network,
+  }), [options, selectedFilter]);
+  const [menu, setMenu] = useState<CollectionMenu | null>(null);
+  const viewport = useRef<NativeAnchor>(null);
+  const menuRequest = useRef(0);
+  const [revealed, setRevealed] = useState<RevealedCard | null>(null);
+  const closeMenu = useCallback(() => {
+    menuRequest.current++;
+    setMenu(null);
+    setRevealed(null);
+  }, []);
+  const closeCardActions = useCallback(() => setRevealed(null), []);
+  useEffect(() => {
+    if (!revealed) return undefined;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => { setRevealed(null); return true; });
+    return () => subscription.remove();
+  }, [revealed]);
+  useFocusEffect(useCallback(() => closeMenu, [closeMenu]));
+  const openMenu = useCallback((anchor: NativeAnchor, create: (placement: DropdownPlacement) => CollectionMenu) => {
+    const request = ++menuRequest.current;
+    anchor.measureInWindow((x, y, width, height) => {
+      viewport.current?.measureInWindow((screenX, screenY, screenWidth, screenHeight) => {
+        if (menuRequest.current !== request || width <= 0 || screenWidth <= 0 || screenHeight <= 0) return;
+        setMenu(create({ anchor: { x: x - screenX, y: y - screenY, width, height }, viewport: { width: screenWidth, height: screenHeight } }));
+      });
+    });
+  }, []);
+  const openFilterMenu = useCallback((kind: CardMenuKind, anchor: NativeAnchor) => {
+    openMenu(anchor, (placement) => ({ type: 'filters', value: { ...placement, kind } }));
+  }, [openMenu]);
+  const revealCardActions = useCallback((card: VaultCard, direction: CardActionDirection) => {
+    haptic();
+    menuRequest.current++;
+    setMenu(null);
+    setRevealed({ id: card.id, direction });
+  }, [haptic]);
+  const editCard = useCallback((card: VaultCard | null) => {
+    closeMenu();
+    onOpenCard(card);
+  }, [closeMenu, onOpenCard]);
+  const activeMenu = menu;
   const filtered = useMemo(() => selectCards(cards, filter), [cards, filter]);
-  const selected = cards.find((card) => card.id === selectedId);
-  const filterKey = `${filter.owner}:${filter.bank}:${filter.network}:${filter.sort}`;
+  const filterKey = `${filter.holder}:${filter.bank}:${filter.network}:${filter.sort}`;
+  const hasFilters = filter.holder !== null || filter.bank !== null || filter.network !== null;
   return (
     <Screen>
+      <View ref={viewport} collapsable={false} style={styles.viewport} onLayout={closeMenu}>
+      <View style={styles.viewport} accessibilityElementsHidden={activeMenu !== null} importantForAccessibility={activeMenu ? 'no-hide-descendants' : 'auto'}>
       <FlatList
         data={filtered}
         keyExtractor={(card) => `${card.id}:${filterKey}`}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 28 }}
-        ListHeaderComponent={<View>
-          <PageHeader title={'All your cards.\nOne quiet place.'} subtitle="Offline. Encrypted. Entirely yours." />
-          <View style={styles.collection}>
-            <View style={{ gap: 5 }}><Text style={[typography.eyebrow, { color: colors.textSecondary }]}>YOUR COLLECTION</Text><Text style={{ color: colors.textSecondary, fontSize: 12 }}>{cards.length} {cards.length === 1 ? 'card' : 'cards'}, safely kept</Text></View>
-            <Pressable accessibilityRole="button" accessibilityLabel="Add a card" onPress={() => { setEditing(null); setEditorOpen(true); }} style={[styles.add, { backgroundColor: colors.textPrimary }]}><Feather name="plus" size={21} color={colors.background} /></Pressable>
+        extraData={revealed}
+        onScrollBeginDrag={closeMenu}
+        contentContainerStyle={styles.content}
+        ListHeaderComponent={<View style={styles.header}>
+          <View style={styles.brandRow}>
+            <View style={styles.wordmark}><BrandMark size={32} /><Text style={[styles.brand, { color: colors.textPrimary }]}>CARDVAULT</Text></View>
+            <View style={styles.privacy}><View style={[styles.privacyDot, { backgroundColor: colors.success }]} /><Text style={[styles.privacyLabel, { color: colors.textSecondary }]}>ONLY ON YOUR DEVICE</Text></View>
           </View>
-          {cards.length ? <CardFilters cards={cards} filter={filter} onChange={setFilter} /> : null}
+          <View style={styles.collection}>
+            <View style={styles.introduction}>
+              <Text accessibilityRole="header" style={[styles.headline, { color: colors.textPrimary }]}>Your collection.</Text>
+              <Text style={[styles.subtitle, { color: colors.textSecondary }]}><Text style={[styles.total, { color: colors.textPrimary }]}>{cards.length.toLocaleString()} {cards.length === 1 ? 'card' : 'cards'}</Text></Text>
+            </View>
+            <Pressable accessibilityRole="button" accessibilityLabel="Add a card" onPress={() => editCard(null)} style={({ pressed }) => [styles.add, { backgroundColor: colors.accent, transform: [{ scale: pressed ? 0.94 : 1 }] }]}><Feather name="plus" size={22} color={colors.onAccent} accessible={false} /></Pressable>
+          </View>
+          {cards.length ? <CardFilters filter={filter} holderLabel={optionLabel(options.holders, filter.holder)} openMenu={activeMenu ? activeMenu.value.kind : null} onOpen={(kind, anchor) => { setRevealed(null); openFilterMenu(kind, anchor); }} /> : null}
+          {hasFilters ? <View style={styles.filterSummary}>
+            <Text accessibilityLiveRegion="polite" numberOfLines={1} style={[styles.summary, { color: colors.textSecondary }]}>{filtered.length.toLocaleString()} of {cards.length.toLocaleString()} cards{filter.holder ? ` / ${optionLabel(options.holders, filter.holder)}` : ''}{filter.bank ? ` / ${optionLabel(options.banks, filter.bank)}` : ''}{filter.network ? ` / ${optionLabel(options.networks, filter.network)}` : ''}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Clear all card filters" onPress={() => setFilter(initialCardFilter)} style={styles.reset}><Text style={[styles.resetText, { color: colors.accent }]}>Reset</Text><Feather name="rotate-ccw" size={11} color={colors.accent} accessible={false} /></Pressable>
+          </View> : null}
         </View>}
         ListEmptyComponent={<View style={{ paddingHorizontal: 24 }}>
-          <EmptyState icon="credit-card" title={cards.length ? 'Nothing in this corner.' : 'Your first card belongs here.'} description={cards.length ? 'Try another bank, network, or owner.' : 'Keep the details you reach for, without carrying the worry.'} />
-          <Button title={cards.length ? 'Clear filters' : 'Add your first card'} icon={cards.length ? 'filter' : 'plus'} onPress={() => { if (cards.length) setFilter(initialCardFilter); else setEditorOpen(true); }} />
+          <EmptyState icon="credit-card" title={cards.length ? 'Nothing in this corner.' : 'Your first card belongs here.'} description={cards.length ? 'Try another name, bank, or network.' : 'Keep the details you reach for, without carrying the worry.'} />
+          <Button title={cards.length ? 'Clear filters' : 'Add your first card'} icon={cards.length ? 'filter' : 'plus'} onPress={() => { if (cards.length) setFilter(initialCardFilter); else editCard(null); }} />
         </View>}
-        renderItem={({ item, index }) => (
-          <Animated.View entering={FadeInDown.delay(Math.min(index, 5) * 45).duration(280).reduceMotion(ReduceMotion.System)} style={styles.cardItem}>
-            <CardFace card={item} onPress={() => setSelectedId(item.id)} />
-            <View style={styles.cardCaption}><Text style={{ color: colors.textSecondary, fontSize: 11 }}>{item.network} / {item.owner}</Text><Text style={{ color: colors.textSecondary, fontSize: 11 }}>Tap to view details <Feather name="arrow-up-right" size={11} /></Text></View>
-          </Animated.View>
-        )}
-        ListFooterComponent={cards.length ? <View style={styles.footer}><Feather name="lock" size={12} color={colors.textSecondary} /><Text style={{ color: colors.textSecondary, fontSize: 10 }}>No servers. No tracking. Just your vault.</Text></View> : undefined}
+        renderItem={({ item, index }) => <CardCollectionItem card={item} index={index} direction={revealed?.id === item.id ? revealed.direction : null} onEdit={editCard} onReveal={revealCardActions} onClose={closeCardActions} />}
       />
-      {selected ? <CardDetailSheet key={selected.id} card={selected} onClose={() => setSelectedId(null)} onEdit={() => { setEditing(selected); setSelectedId(null); setEditorOpen(true); }} /> : null}
-      {editorOpen ? <CardEditorSheet key={editing?.id ?? 'new'} card={editing} onClose={() => { setEditorOpen(false); setEditing(null); }} /> : null}
+      </View>
+      {activeMenu ? <CardFilterDropdown menu={activeMenu.value} options={options} filter={filter} onChange={setFilter} onClose={closeMenu} /> : null}
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  collection: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 24, paddingTop: 8, paddingBottom: 22 },
-  add: { width: 44, height: 44, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
-  cardItem: { paddingHorizontal: 24, paddingBottom: 21, gap: 11 },
-  cardCaption: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 },
-  footer: { flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', paddingTop: 14 },
+  viewport: { flex: 1 },
+  content: { paddingBottom: 28 },
+  header: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 24, gap: 22 },
+  brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  wordmark: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  brand: { ...typography.eyebrow },
+  privacy: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1 },
+  privacyDot: { width: 4, height: 4, borderRadius: 2 },
+  privacyLabel: { fontSize: 10, fontWeight: '600', letterSpacing: 0.5, flexShrink: 1 },
+  collection: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14 },
+  introduction: { flex: 1, minWidth: 0, gap: 8 },
+  headline: { ...typography.hero },
+  subtitle: { ...typography.label },
+  total: { fontWeight: '600', fontVariant: ['tabular-nums'] },
+  add: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  filterSummary: { marginTop: -13, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  summary: { ...typography.caption, flex: 1, minWidth: 0, fontVariant: ['tabular-nums'] },
+  reset: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  resetText: { ...typography.caption, fontWeight: '600' },
+  cardItem: { paddingHorizontal: 24, paddingBottom: 20 },
+  cardSlot: { position: 'relative' },
+  tray: { position: 'absolute', top: 0, bottom: 0, justifyContent: 'center' },
+  sliver: { position: 'absolute', top: 0, bottom: 0 },
 });

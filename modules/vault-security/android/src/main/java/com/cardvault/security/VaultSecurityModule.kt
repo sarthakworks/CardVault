@@ -2,11 +2,40 @@ package com.cardvault.security
 
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.kotlin.activityresult.AppContextActivityResultLauncher
+import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.functions.Queues
 
 class VaultSecurityModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("VaultSecurity")
+
+    Events("onAppClosed")
+
+    lateinit var backupDocumentLauncher: AppContextActivityResultLauncher<String, String?>
+
+    RegisterActivityContracts {
+      backupDocumentLauncher = registerForActivityResult(BackupDocumentContract())
+    }
+
+    AsyncFunction("createBackupDocument") Coroutine { name: String ->
+      backupDocumentLauncher.launch(name)
+    }
+
+    AsyncFunction("rememberBackupDocument") { uri: String ->
+      val context = requireNotNull(appContext.reactContext) { "Application context unavailable" }
+      BackupDocumentAccess.remember(context, uri)
+    }
+
+    OnActivityDestroys {
+      if (appContext.currentActivity?.isChangingConfigurations == false) {
+        sendEvent("onAppClosed")
+      }
+    }
+
+    Function("getActivitySessionId") {
+      PrivacyController.sessionId
+    }
 
     Function("isWindowFocused") {
       appContext.currentActivity?.hasWindowFocus() ?: false
@@ -14,10 +43,6 @@ class VaultSecurityModule : Module() {
 
     AsyncFunction("releasePrivacyShield") {
       appContext.currentActivity?.let { PrivacyController.reveal(it) }
-    }.runOnQueue(Queues.MAIN)
-
-    AsyncFunction("showPrivacyShield") {
-      appContext.currentActivity?.let { PrivacyController.obscure(it) }
     }.runOnQueue(Queues.MAIN)
 
     AsyncFunction("armClipboardExpiry") { hash: String ->

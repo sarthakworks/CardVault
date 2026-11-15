@@ -3,9 +3,16 @@ import type { EnvelopeHeader } from '../crypto/envelope';
 import type { CardInput, NoteInput, VaultSnapshot } from '../vault/models';
 import { VaultError } from '../errors/VaultError';
 import { sessionKeyring } from './sessionKeyring';
+import type { CardDetailField } from '../validation/cardRules';
+
+export type CardAutofillField = CardDetailField;
+export interface CardAutofillState {
+  manualFields: CardAutofillField[];
+  automaticFields: CardAutofillField[];
+}
 
 type SessionDraft =
-  | { kind: 'card'; values: CardInput }
+  | { kind: 'card'; values: CardInput; autofill?: CardAutofillState }
   | { kind: 'note'; values: NoteInput };
 
 interface SessionState {
@@ -32,7 +39,10 @@ export function keepSessionDraft(key: string, draft: SessionDraft, generation: n
   useSessionStore.setState((state) => {
     if (state.status !== 'unlocked' || state.generation !== generation) return state;
     const copy: SessionDraft = draft.kind === 'card'
-      ? { kind: 'card', values: { ...draft.values } }
+      ? {
+        kind: 'card', values: { ...draft.values },
+        ...(draft.autofill ? { autofill: { manualFields: [...draft.autofill.manualFields], automaticFields: [...draft.autofill.automaticFields] } } : {}),
+      }
       : { kind: 'note', values: { ...draft.values } };
     return { drafts: { ...state.drafts, [key]: copy } };
   });

@@ -22,10 +22,22 @@ object KeystoreSecurityInspector {
     } else {
       info.isInsideSecureHardware
     }
+    val authenticationRequired = info.isUserAuthenticationRequired
+    val authenticationType = if (Build.VERSION.SDK_INT >= 30) info.userAuthenticationType else null
     return mapOf(
       "hardwareBacked" to hardwareBacked,
-      "authenticationRequired" to (info.isUserAuthenticationRequired && info.isUserAuthenticationRequirementEnforcedBySecureHardware),
-      "perUseAuthentication" to (info.userAuthenticationValidityDurationSeconds == -1)
+      "authenticationRequired" to (authenticationRequired && info.isUserAuthenticationRequirementEnforcedBySecureHardware),
+      "perUseAuthentication" to isPerUseBiometricAuthentication(
+        authenticationRequired, info.userAuthenticationValidityDurationSeconds, authenticationType
+      )
     )
+  }
+
+  internal fun isPerUseBiometricAuthentication(required: Boolean, validitySeconds: Int, authenticationType: Int?): Boolean {
+    if (!required) return false
+    if (authenticationType == null) return validitySeconds == -1
+    if (authenticationType != KeyProperties.AUTH_BIOMETRIC_STRONG) return false
+    // Keystore2 reports an absent per-operation AUTH_TIMEOUT as 0; legacy KeyInfo uses -1.
+    return validitySeconds == -1 || validitySeconds == 0
   }
 }

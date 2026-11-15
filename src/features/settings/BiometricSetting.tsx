@@ -1,42 +1,108 @@
-import { useEffect, useState } from 'react';
-import { Switch, Text, View } from 'react-native';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, AppState, StyleSheet, Switch, Text, View } from 'react-native';
+import Feather from '@expo/vector-icons/Feather';
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as SecureStore from 'expo-secure-store';
+import { errorMessage } from '../../core/errors/VaultError';
 import { useTheme } from '../../shared/theme/ThemeProvider';
-import { setBiometricUnlock } from '../../core/security/biometricKeyStore';
-import { notify, reportError } from '../../core/errors/noticeStore';
-import { ActionAuthorizationSheet } from '../auth/ActionAuthorizationSheet';
-import { useSettingsStore, refreshSettings } from './settingsStore';
+import { typography } from '../../shared/theme/typography';
+import { changeFingerprintUnlock, useSettingsStore } from './settingsStore';
+
+type Availability =
+  | { status: 'checking' | 'available' | 'not-enrolled' | 'unsupported' }
+  | { status: 'error'; message: string };
 
 export function BiometricSetting() {
   const { colors } = useTheme();
   const enabled = useSettingsStore((state) => state.biometricsEnabled);
-  const [requested, setRequested] = useState<boolean | null>(null);
-  const [available, setAvailable] = useState(false);
+  const [availability, setAvailability] = useState<Availability>({ status: 'checking' });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const changing = useRef(false);
+
   useEffect(() => {
-    void LocalAuthentication.getEnrolledLevelAsync().then((level) => setAvailable(level === LocalAuthentication.SecurityLevel.BIOMETRIC_STRONG)).catch(reportError);
+    let version = 0;
+    function checkAvailability() {
+      const request = ++version;
+      setAvailability({ status: 'checking' });
+      void Promise.all([
+        LocalAuthentication.hasHardwareAsync(),
+        LocalAuthentication.getEnrolledLevelAsync(),
+      ]).then(([hardware, level]) => {
+        if (request !== version) return;
+        const status = !hardware
+          ? 'unsupported'
+          : level !== LocalAuthentication.SecurityLevel.BIOMETRIC_STRONG
+            ? 'not-enrolled'
+            : SecureStore.canUseBiometricAuthentication() ? 'available' : 'unsupported';
+        setAvailability({ status });
+      }).catch((cause) => {
+        if (request === version) setAvailability({ status: 'error', message: errorMessage(cause) });
+      });
+    }
+    checkAvailability();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') checkAvailability();
+    });
+    return () => { version++; subscription.remove(); };
   }, []);
+
+  async function change(value: boolean) {
+    if (changing.current || value === enabled) return;
+    changing.current = true;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await changeFingerprintUnlock(value);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      changing.current = false;
+      setBusy(false);
+    }
+  }
+
+  const available = availability.status === 'available';
+  const disabled = busy || (!enabled && !available);
+  const description = availability.status === 'checking'
+    ? 'Checking device support'
+    : enabled
+      ? available ? 'On for future app opens' : 'Unavailable. Master password still works.'
+      : availability.status === 'not-enrolled'
+        ? 'Set up a strong fingerprint in Android settings'
+        : available ? 'Use instead of your master password' : 'Fingerprint is unavailable on this device';
+  const message = error ?? (availability.status === 'error' ? availability.message : undefined);
+
   return (
-    <>
-      <View style={{ padding: 18, borderRadius: 19, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, gap: 14 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 13 }}>
-          <View style={{ backgroundColor: colors.accentMuted, padding: 10, borderRadius: 14 }}><MaterialCommunityIcons name="fingerprint" size={24} color={colors.accent} /></View>
-          <View style={{ flex: 1, gap: 5 }}><Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: 14 }}>Fingerprint authentication</Text><Text style={{ color: colors.textSecondary, fontSize: 11 }}>{enabled ? 'Unlock and confirm changes with a fingerprint' : available ? 'Optional. Master password remains available.' : 'Enroll a strong biometric in Android first'}</Text></View>
-          <Switch accessibilityLabel="Enable fingerprint authentication" value={enabled} disabled={!available && !enabled} onValueChange={setRequested} trackColor={{ false: colors.border, true: colors.accent }} thumbColor={colors.surface} />
+    <View style={{ gap: 10 }}>
+      <View style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.icon, { backgroundColor: colors.accentMuted }]}><Feather name="user-check" size={20} color={colors.accent} /></View>
+        <View style={styles.labels}>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Fingerprint unlock</Text>
+          <Text style={[styles.detail, { color: colors.textSecondary }]}>{description}</Text>
         </View>
-        <Text style={{ color: colors.textSecondary, fontSize: 11, lineHeight: 18 }}>Use a fingerprint or master password for each save, edit, deletion, and import merge. Backup encryption and decryption still need the dedicated backup password.</Text>
+        {busy ? <ActivityIndicator size="small" color={colors.accent} /> : null}
+        <Switch
+          accessibilityLabel="Fingerprint unlock"
+          accessibilityHint="Use your fingerprint to unlock Cardvault when opening the app"
+          accessibilityState={{ disabled, busy }}
+          value={enabled}
+          disabled={disabled}
+          onValueChange={(value) => void change(value)}
+          trackColor={{ false: colors.border, true: colors.accent }}
+          thumbColor={colors.surface}
+        />
       </View>
-      <ActionAuthorizationSheet visible={requested !== null} operation="biometrics:toggle" onClose={() => setRequested(null)} title={requested ? 'Make access effortless.' : 'Password-only it is.'} description={requested ? 'Confirm your master password to enable fingerprint authentication. We only enable it when the actual key is hardware-protected.' : 'Confirm with your fingerprint or master password to disable fingerprint authentication.'} onAuthorized={async (authorization) => {
-        if (requested === null) throw new Error('Choose a biometric setting first.');
-        try {
-          await setBiometricUnlock(requested, authorization);
-          await refreshSettings();
-          notify(requested ? 'Biometric unlock enabled. Unlock to continue.' : 'Biometric unlock disabled.');
-        } catch (error) {
-          reportError(error);
-          throw error;
-        }
-      }} />
-    </>
+      {message ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.danger }]}>{message}</Text> : null}
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  row: { minHeight: 82, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 17, gap: 13, borderRadius: 20, borderWidth: 1 },
+  icon: { width: 37, height: 37, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  labels: { flex: 1, gap: 5 },
+  title: { ...typography.label },
+  detail: { ...typography.small },
+  error: { ...typography.small, paddingHorizontal: 4 },
+});

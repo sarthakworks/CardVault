@@ -1,6 +1,6 @@
 export class VaultError extends Error {
   constructor(
-    readonly code: 'locked' | 'password' | 'format' | 'storage' | 'conflict' | 'authorization' | 'biometric' | 'limit',
+    readonly code: 'locked' | 'password' | 'format' | 'storage' | 'conflict' | 'biometric' | 'limit',
     message: string,
     options?: ErrorOptions,
   ) {

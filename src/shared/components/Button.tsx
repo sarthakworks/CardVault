@@ -4,6 +4,7 @@ import Feather from '@expo/vector-icons/Feather';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useTheme } from '../theme/ThemeProvider';
 import { useHaptics } from '../hooks/useHaptics';
+import { typography } from '../theme/typography';
 
 interface Props {
   title: string;
@@ -35,13 +36,13 @@ export function Button({ title, onPress, icon, variant = 'primary', loading = fa
       onPress={() => { haptic(); onPress(); }}
       style={[styles.button, { backgroundColor: background, opacity: disabled ? 0.5 : 1 }, animated]}
     >
-      {loading ? <ActivityIndicator color={foreground} /> : icon ? <Feather name={icon} size={18} color={foreground} /> : null}
+      {loading ? <ActivityIndicator color={foreground} /> : icon ? <Feather name={icon} size={20} color={foreground} /> : null}
       <Text style={[styles.label, { color: foreground }]}>{title}</Text>
     </AnimatedPressable>
   );
 }
 
 const styles = StyleSheet.create({
-  button: { minHeight: 52, borderRadius: 16, paddingHorizontal: 20, flexDirection: 'row', gap: 10, alignItems: 'center', justifyContent: 'center' },
-  label: { fontSize: 14, fontWeight: '700', letterSpacing: 0.1 },
+  button: { minHeight: 52, borderRadius: 14, paddingHorizontal: 20, paddingVertical: 14, flexDirection: 'row', gap: 10, alignItems: 'center', justifyContent: 'center' },
+  label: { ...typography.button, minWidth: 0, flexShrink: 1, textAlign: 'center' },
 });

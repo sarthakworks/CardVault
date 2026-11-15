@@ -10,9 +10,13 @@
       "credentialsSource": "remote",
       "autoIncrement": true,
       "node": "24.14.1",
+      "buildArtifactPaths": [
+        "android/app/build/outputs/apk/release/app-*-release.apk"
+      ],
       "android": {
         "buildType": "apk",
-        "resourceClass": "medium"
+        "resourceClass": "medium",
+        "applicationArchivePath": "android/app/build/outputs/apk/release/app-arm64-v8a-release.apk"
       }
     }
   }

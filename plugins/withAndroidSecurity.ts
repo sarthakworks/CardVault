@@ -1,20 +1,49 @@
 import {
+  AndroidConfig,
   type ConfigPlugin,
   withAndroidManifest,
+  withAppBuildGradle,
   withMainActivity,
   withDangerousMod,
 } from 'expo/config-plugins';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+const binEnvironmentInputs = `// Cardvault BIN lookup bundle inputs.
+tasks.withType(com.facebook.react.tasks.BundleHermesCTask).configureEach {
+    inputs.files(fileTree(rootProject.projectDir.parentFile) {
+        include '.env', '.env.*'
+        exclude '.env.example'
+    }).withPropertyName('cardvaultBinEnvFiles')
+      .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    inputs.property('cardvaultBinKeyFingerprint',
+        providers.environmentVariable('EXPO_PUBLIC_HANDY_API_KEY').orElse('').map { key ->
+            java.security.MessageDigest.getInstance('SHA-256')
+                .digest(key.getBytes('UTF-8')).encodeHex().toString()
+        })
+}`;
+
 const withAndroidSecurity: ConfigPlugin = (config) => {
   config = withAndroidManifest(config, (mod) => {
+    const internet = 'android.permission.INTERNET';
+    if (mod.android?.permissions?.includes(internet) && !mod.android.blockedPermissions?.includes(internet)) {
+      // Remove the old offline build's tools:node="remove" marker during incremental prebuilds.
+      AndroidConfig.Permissions.removePermissions(mod.modResults, [internet]);
+      AndroidConfig.Permissions.ensurePermissions(mod.modResults, [internet]);
+    }
     const application = mod.modResults.manifest.application?.[0];
     if (!application) throw new Error('Android application manifest is missing.');
     application.$['android:allowBackup'] = 'false';
     application.$['android:usesCleartextTraffic'] = 'false';
     application.$['android:fullBackupContent'] = 'false';
     application.$['android:dataExtractionRules'] = '@xml/vault_data_extraction_rules';
+    return mod;
+  });
+  config = withAppBuildGradle(config, (mod) => {
+    if (mod.modResults.language !== 'groovy') throw new Error('Cardvault BIN environment inputs require a Groovy app build.gradle.');
+    if (!mod.modResults.contents.includes(binEnvironmentInputs)) {
+      mod.modResults.contents = `${mod.modResults.contents.trimEnd()}\n\n${binEnvironmentInputs}\n`;
+    }
     return mod;
   });
   config = withMainActivity(config, (mod) => {

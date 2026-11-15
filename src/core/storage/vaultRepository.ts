@@ -49,6 +49,6 @@ export async function saveVaultCiphertext(ciphertext: string, expectedRevision: 
       'UPDATE vault SET ciphertext = ?, revision = ? WHERE id = 1 AND revision = ?',
       ciphertext, expectedRevision + 1, expectedRevision,
     );
-    if (result.changes !== 1) throw new VaultError('conflict', 'Your vault changed. Lock and unlock it before trying again.');
+    if (result.changes !== 1) throw new VaultError('conflict', 'Your vault changed. Close and reopen Cardvault before trying again.');
   });
 }

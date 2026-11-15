@@ -1,26 +1,57 @@
+import { useRef, type ComponentRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import type { SecureNote } from '../../core/vault/models';
 import { useTheme } from '../../shared/theme/ThemeProvider';
+import { typography } from '../../shared/theme/typography';
 import { displayDate } from '../../shared/utils/formatters';
 
-export function NotePreview({ note, onPress }: { note: SecureNote; onPress: () => void }) {
+export function NotePreview({ note, layout, onPress, onOptions }: {
+  note: SecureNote;
+  layout: 'grid' | 'list';
+  onPress: () => void;
+  onOptions: (anchor: ComponentRef<typeof View>) => void;
+}) {
   const { colors } = useTheme();
+  const reference = useRef<ComponentRef<typeof View>>(null);
+  const tone = note.id.charCodeAt(0) % 3;
+  const paper = tone === 0 ? colors.surface : tone === 1 ? colors.surfaceMuted : colors.accentMuted;
+  const label = note.title || note.content.trim().slice(0, 80);
+  function showOptions() {
+    if (reference.current) onOptions(reference.current);
+  }
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${note.title}, ${note.category}`} onPress={onPress} style={[styles.note, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={styles.top}><View style={[styles.icon, { backgroundColor: colors.accentMuted }]}><Feather name="file-text" size={18} color={colors.accent} /></View><Feather name="arrow-up-right" size={15} color={colors.textSecondary} /></View>
-      <Text numberOfLines={2} style={[styles.title, { color: colors.textPrimary }]}>{note.title}</Text>
-      <Text numberOfLines={3} style={[styles.preview, { color: colors.textSecondary }]}>{note.content}</Text>
-      <View style={styles.footer}><Text numberOfLines={1} style={{ color: colors.accent, fontSize: 10, fontWeight: '600' }}>{note.category}</Text><Text style={{ color: colors.textSecondary, fontSize: 9 }}>{displayDate(note.updatedAt)}</Text></View>
-    </Pressable>
+    <View style={styles.container}>
+      <Pressable
+        ref={reference}
+        collapsable={false}
+        accessibilityRole="button"
+        accessibilityLabel={`Open note: ${label}`}
+        accessibilityHint="Opens the note for editing. Hold for more actions."
+        onPress={onPress}
+        onLongPress={showOptions}
+        delayLongPress={450}
+        style={({ pressed }) => [styles.note, layout === 'list' && styles.listNote, { backgroundColor: paper, borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]}
+      >
+        {note.title ? <Text numberOfLines={layout === 'grid' ? 2 : 1} style={[styles.title, { color: colors.textPrimary }]}>{note.title}</Text> : null}
+        <Text numberOfLines={layout === 'grid' ? 6 : 3} style={[styles.preview, !note.title && styles.untitledPreview, { color: colors.textSecondary }]}>{note.content}</Text>
+        <View style={styles.footer}><Text style={[styles.date, { color: colors.textSecondary }]}>{displayDate(note.updatedAt)}</Text></View>
+      </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={`More actions for ${note.title || 'untitled note'}`} onPress={showOptions} style={({ pressed }) => [styles.more, { backgroundColor: pressed ? colors.surfaceMuted : 'transparent' }]}>
+        <Feather name="more-horizontal" size={17} color={colors.textSecondary} accessible={false} />
+      </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  note: { flex: 1, minHeight: 218, borderWidth: 1, borderRadius: 21, padding: 17, gap: 12 },
-  top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  icon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 16, lineHeight: 21, fontWeight: '700', letterSpacing: -0.3 },
-  preview: { fontSize: 12, lineHeight: 18, flex: 1 },
-  footer: { gap: 5, paddingTop: 4 },
+  container: { flex: 1 },
+  note: { flex: 1, minHeight: 190, borderWidth: 1, borderRadius: 19, paddingHorizontal: 17, paddingTop: 19, paddingBottom: 9, gap: 10 },
+  listNote: { minHeight: 130 },
+  title: { ...typography.label, fontSize: 16, lineHeight: 23 },
+  preview: { ...typography.small, flex: 1 },
+  untitledPreview: { ...typography.body },
+  footer: { minHeight: 30, justifyContent: 'center', paddingRight: 32 },
+  date: { ...typography.caption },
+  more: { position: 'absolute', right: 4, bottom: 3, width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 });

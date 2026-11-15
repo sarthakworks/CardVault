@@ -1,6 +1,8 @@
 import 'tsx/cjs';
 import type { ExpoConfig } from 'expo/config';
+import type withBuildProperties from 'expo-build-properties';
 import { version } from './package.json';
+import withAndroidApkSplits from './plugins/withAndroidApkSplits';
 import withAndroidSecurity from './plugins/withAndroidSecurity';
 
 const easProjectId = process.env.EAS_PROJECT_ID ?? process.env.EAS_BUILD_PROJECT_ID;
@@ -17,14 +19,14 @@ const config: ExpoConfig = {
   orientation: 'portrait',
   userInterfaceStyle: 'automatic',
   icon: './assets/icon.png',
-  backgroundColor: '#F6F7FB',
+  backgroundColor: '#F5F6F8',
   updates: { enabled: false },
   android: {
     package: 'com.cardvault.app',
     versionCode: 1,
     allowBackup: false,
+    permissions: ['android.permission.INTERNET'],
     blockedPermissions: [
-      'android.permission.INTERNET',
       'android.permission.ACCESS_NETWORK_STATE',
       'android.permission.ACCESS_WIFI_STATE',
       'android.permission.READ_EXTERNAL_STORAGE',
@@ -34,22 +36,32 @@ const config: ExpoConfig = {
     ],
     adaptiveIcon: {
       foregroundImage: './assets/android-icon-foreground.png',
-      backgroundColor: '#142033',
+      monochromeImage: './assets/android-icon-monochrome.png',
+      backgroundColor: '#EDF3FF',
     },
     predictiveBackGestureEnabled: true,
   },
   plugins: [
-    ['expo-build-properties', { android: { minSdkVersion: 29 } }],
+    ['expo-build-properties', {
+      android: {
+        minSdkVersion: 29,
+        buildArchs: ['armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'],
+        enableMinifyInReleaseBuilds: true,
+        enableShrinkResourcesInReleaseBuilds: true,
+        useLegacyPackaging: true,
+        enableBundleCompression: true,
+      },
+    } satisfies Parameters<typeof withBuildProperties>[1]],
     ['expo-secure-store', { configureAndroidBackup: false }],
     ['expo-splash-screen', {
       image: './assets/splash-icon.png',
-      imageWidth: 120,
-      backgroundColor: '#F6F7FB',
-      dark: { backgroundColor: '#0B111B' },
+      imageWidth: 160,
+      backgroundColor: '#F5F6F8',
+      dark: { backgroundColor: '#101216' },
     }],
     'expo-sqlite',
     'expo-font',
   ],
 };
 
-export default withAndroidSecurity(config);
+export default withAndroidApkSplits(withAndroidSecurity(config));

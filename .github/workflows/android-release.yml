@@ -28,11 +28,11 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           if [[ -z "$EXPO_TOKEN" ]]; then
-            echo "::error::Add the EXPO_TOKEN repository secret. See README.md: Automated APK releases."
+            echo "::error::Add the EXPO_TOKEN repository secret. See nerdy.md: Automated APK releases."
             exit 1
           fi
           if [[ -z "$EAS_PROJECT_ID" ]]; then
-            echo "::error::Add the EAS_PROJECT_ID repository variable and complete the initial signed EAS build. See README.md: Automated APK releases."
+            echo "::error::Add the EAS_PROJECT_ID repository variable and complete the initial signed EAS build. See nerdy.md: Automated APK releases."
             exit 1
           fi
 
@@ -54,25 +54,41 @@ jobs:
           eas-version: '25.2.0'
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Build a signed standalone APK
+      - name: Build signed APKs for all Android CPUs
+        env:
+          EXPO_PUBLIC_HANDY_API_KEY: ${{ secrets.EXPO_PUBLIC_HANDY_API_KEY }}
         run: |
+          original_eas_config="$(mktemp "$RUNNER_TEMP/cardvault-eas.XXXXXX")"
+          cp eas.json "$original_eas_config"
+          trap 'cp "$original_eas_config" eas.json && rm -f "$original_eas_config"' EXIT
+          node <<'NODE'
+          const fs = require('node:fs');
+          const key = process.env.EXPO_PUBLIC_HANDY_API_KEY?.trim();
+          if (!key || /[\r\n]/.test(key)) {
+            console.error('::error::Add EXPO_PUBLIC_HANDY_API_KEY as a repository Actions secret containing a single-line HandyAPI Publishable (Frontend) key.');
+            process.exit(1);
+          }
+          const config = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
+          config.build.release.env = {
+            ...config.build.release.env,
+            EXPO_PUBLIC_HANDY_API_KEY: key,
+          };
+          fs.writeFileSync('eas.json', `${JSON.stringify(config, null, 2)}\n`);
+          NODE
           eas build --platform android --profile release --non-interactive --wait --json > "$RUNNER_TEMP/eas-build.json"
 
       - name: Read the finished APK version
         id: apk
         run: npx --no-install tsx scripts/prepare-apk-release.ts "$RUNNER_TEMP/eas-build.json"
 
-      - name: Download and checksum the APK
+      - name: Download, validate and checksum the APKs
         env:
-          ARTIFACT_URL: ${{ steps.apk.outputs.artifact_url }}
+          ARTIFACTS_URL: ${{ steps.apk.outputs.artifacts_url }}
         run: |
-          mkdir -p "$RUNNER_TEMP/apk-release"
           curl --fail --location --retry 3 --proto '=https' --proto-redir '=https' \
-            --output "$RUNNER_TEMP/apk-release/cardvault.apk" "$ARTIFACT_URL"
-          unzip -tq "$RUNNER_TEMP/apk-release/cardvault.apk"
-          unzip -Z -1 "$RUNNER_TEMP/apk-release/cardvault.apk" | grep -Fx 'AndroidManifest.xml'
-          cd "$RUNNER_TEMP/apk-release"
-          sha256sum cardvault.apk > SHA256SUMS.txt
+            --output "$RUNNER_TEMP/apk-artifacts.tar.gz" "$ARTIFACTS_URL"
+          npx --no-install tsx scripts/package-apk-release.ts \
+            "$RUNNER_TEMP/apk-artifacts.tar.gz" "$RUNNER_TEMP/apk-release"
 
       - name: Publish the GitHub Release
         env:
@@ -93,7 +109,7 @@ jobs:
             --title "Cardvault $APP_VERSION (build $BUILD_NUMBER)" \
             --notes-file "$RUNNER_TEMP/apk-release-notes.md" \
             "${release_flags[@]}" \
-            "$RUNNER_TEMP/apk-release/cardvault.apk" \
+            "$RUNNER_TEMP/apk-release/"*.apk \
             "$RUNNER_TEMP/apk-release/SHA256SUMS.txt")"
 
           if [[ "$GITHUB_REF" == "refs/heads/$DEFAULT_BRANCH" ]]; then
@@ -103,6 +119,6 @@ jobs:
             fi
           fi
 
-          printf '### Cardvault %s (build %s)\n\n[Download APK](%s/releases/download/%s/cardvault.apk)\n\n[View release](%s)\n' \
+          printf '### Cardvault %s (build %s)\n\n[Download ARM64 APK](%s/releases/download/%s/cardvault.apk)\n\n[All CPU versions](%s)\n' \
             "$APP_VERSION" "$BUILD_NUMBER" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
             "$RELEASE_TAG" "$release_url" >> "$GITHUB_STEP_SUMMARY"

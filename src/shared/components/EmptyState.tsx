@@ -18,7 +18,7 @@ export function EmptyState({ icon, title, description }: { icon: ComponentProps<
 }
 
 const styles = StyleSheet.create({
-  container: { alignItems: 'center', paddingHorizontal: 26, paddingVertical: 38, gap: 12 },
-  halo: { width: 110, height: 110, borderRadius: 36, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 14, transform: [{ rotate: '-7deg' }] },
-  icon: { height: 70, width: 70, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  container: { alignItems: 'center', paddingHorizontal: 16, paddingVertical: 40, gap: 12 },
+  halo: { width: 88, height: 88, borderRadius: 28, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  icon: { height: 64, width: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
 });

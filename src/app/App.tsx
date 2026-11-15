@@ -1,7 +1,6 @@
 import { Component, useEffect, useLayoutEffect, useState, type PropsWithChildren } from 'react';
 import { AppState, ScrollView, Text, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import * as ScreenCapture from 'expo-screen-capture';
@@ -12,12 +11,13 @@ import { AppProviders } from './AppProviders';
 import { RootNavigator } from './navigation/RootNavigator';
 import { initializeAuth } from '../features/auth/authService';
 import { refreshSettings } from '../features/settings/settingsStore';
-import { cleanupEncryptedCache } from '../features/backup/backupService';
+import { cleanupBackupCache } from '../features/backup/backupService';
 import { watchSessionLifecycle, lockSession } from '../core/security/sessionLifecycle';
 import { useSessionStore } from '../core/security/sessionStore';
 import { errorMessage } from '../core/errors/VaultError';
 import { reportError } from '../core/errors/noticeStore';
 import { useTheme } from '../shared/theme/ThemeProvider';
+import { palettes } from '../shared/theme/colors';
 import { typography } from '../shared/theme/typography';
 import { Screen } from '../shared/components/Screen';
 import { Button } from '../shared/components/Button';
@@ -32,9 +32,9 @@ class VaultErrorBoundary extends Component<PropsWithChildren, { failed: boolean 
   override componentDidCatch() { lockSession(); }
   override render() {
     if (this.state.failed) return (
-      <View style={{ flex: 1, backgroundColor: '#0B111B', padding: 30, justifyContent: 'center', gap: 20 }}>
-        <Text style={{ color: '#F3F6FC', fontSize: 24, fontWeight: '700' }}>Your vault stopped safely.</Text>
-        <Text style={{ color: '#ACB9CC', fontSize: 15, lineHeight: 24 }}>An unexpected display error occurred. Your session was cleared. Close and reopen Cardvault to unlock again.</Text>
+      <View style={{ flex: 1, backgroundColor: palettes.dark.background, padding: 30, justifyContent: 'center', gap: 20 }}>
+        <Text style={[typography.title, { color: palettes.dark.textPrimary }]}>Your vault stopped safely.</Text>
+        <Text style={[typography.body, { color: palettes.dark.textSecondary }]}>An unexpected display error occurred. Your session was cleared. Close and reopen Cardvault to unlock again.</Text>
       </View>
     );
     return this.props.children;
@@ -49,12 +49,12 @@ function AppContent() {
   const [initialized, setInitialized] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
   const [focusVersion, setFocusVersion] = useState(0);
-  const [fontsLoaded, fontError] = useFonts({ ...Feather.font, ...MaterialCommunityIcons.font });
+  const [fontsLoaded, fontError] = useFonts(Feather.font);
   useEffect(() => {
     const stop = watchSessionLifecycle(() => setFocusVersion((value) => value + 1));
     async function initialize() {
       await ScreenCapture.preventScreenCaptureAsync('cardvault');
-      cleanupEncryptedCache();
+      cleanupBackupCache();
       await Promise.all([initializeAuth(), refreshSettings()]);
       setInitialized(true);
     }

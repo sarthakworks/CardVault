@@ -17,11 +17,17 @@ object PrivacyController {
   private var activityReference = WeakReference<Activity>(null)
   private var shield: FrameLayout? = null
   private var learningListener: ViewTreeObserver.OnGlobalLayoutListener? = null
+  private var preserveSessionOnAttach = false
+  @Volatile
+  var sessionId = 0
+    private set
 
   fun attach(activity: Activity) {
     activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
     if (activityReference.get() !== activity) {
       activityReference.get()?.let { detach(it) }
+      if (!preserveSessionOnAttach) sessionId++
+      preserveSessionOnAttach = false
       activityReference = WeakReference(activity)
       val decor = activity.window.decorView
       learningListener = ViewTreeObserver.OnGlobalLayoutListener { preventKeyboardLearning(decor) }
@@ -40,6 +46,7 @@ object PrivacyController {
 
   fun detach(activity: Activity) {
     if (activityReference.get() !== activity) return
+    preserveSessionOnAttach = activity.isChangingConfigurations
     learningListener?.let { activity.window.decorView.viewTreeObserver.removeOnGlobalLayoutListener(it) }
     (shield?.parent as? ViewGroup)?.removeView(shield)
     shield = null
@@ -52,12 +59,12 @@ object PrivacyController {
     ClipboardExpiryController.clearOwned(activity.applicationContext)
     val decor = activity.window.decorView as? ViewGroup ?: return
     val cover = shield ?: FrameLayout(activity).apply {
-      setBackgroundColor(Color.rgb(11, 17, 27))
+      setBackgroundColor(Color.rgb(16, 18, 22))
       isClickable = true
       isFocusable = true
       importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
       addView(TextView(activity).apply {
-        text = "CARDVAULT\n\nYour private space."
+        text = "CARDVAULT"
         setTextColor(Color.WHITE)
         textSize = 20f
         gravity = Gravity.CENTER

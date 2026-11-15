@@ -1,46 +1,58 @@
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { useState, type ComponentRef, type ReactNode, type Ref } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
 import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import Feather from '@expo/vector-icons/Feather';
 import { useTheme } from '../theme/ThemeProvider';
+import { typography } from '../theme/typography';
 
 interface Props extends Omit<TextInputProps, 'ref'> {
   label?: string;
   error?: string;
   inSheet?: boolean;
+  variant?: 'filled' | 'plain' | 'soft';
+  labelStyle?: StyleProp<TextStyle>;
+  containerStyle?: StyleProp<ViewStyle>;
+  rightAccessory?: ReactNode;
+  inputRef?: Ref<ComponentRef<typeof TextInput>>;
 }
 
 export function TextField(
-  { label, error, secureTextEntry, style, inSheet = false, ...props }: Props,
+  { label, error, secureTextEntry, style, inSheet = false, variant = 'filled', labelStyle, containerStyle, rightAccessory, inputRef, ...props }: Props,
 ) {
   const { colors } = useTheme();
   const [revealed, setRevealed] = useState(false);
-  const Input = inSheet ? BottomSheetTextInput : TextInput;
+  const plain = variant === 'plain';
+  const soft = variant === 'soft';
+  const inputProps: TextInputProps = {
+    autoCorrect: false,
+    spellCheck: false,
+    autoComplete: 'off',
+    importantForAutofill: 'no',
+    autoCapitalize: 'none',
+    contextMenuHidden: true,
+    disableFullscreenUI: true,
+    underlineColorAndroid: 'transparent',
+    placeholderTextColor: colors.textSecondary,
+    selectionColor: colors.accent,
+    ...props,
+    secureTextEntry: secureTextEntry && !revealed,
+    style: [styles.input, plain && styles.plainInput, { color: colors.textPrimary }, style],
+  };
   return (
-    <View style={styles.group}>
-      {label ? <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text> : null}
+    <View style={[styles.group, containerStyle]}>
+      {label ? <Text style={[styles.label, { color: colors.textSecondary }, labelStyle]}>{label}</Text> : null}
       <View style={[styles.inputRow, {
-        backgroundColor: colors.surfaceMuted,
+        backgroundColor: plain ? 'transparent' : colors.surfaceMuted,
         borderColor: error ? colors.danger : colors.border,
+        borderWidth: plain || soft && !error ? 0 : 1,
+        flex: plain && props.multiline ? 1 : undefined,
         alignItems: props.multiline ? 'flex-start' : 'center',
       }]}>
-        <Input
-          autoCorrect={false}
-          spellCheck={false}
-          autoComplete="off"
-          importantForAutofill="no"
-          autoCapitalize="none"
-          contextMenuHidden
-          disableFullscreenUI
-          placeholderTextColor={colors.textSecondary}
-          selectionColor={colors.accent}
-          {...props}
-          secureTextEntry={secureTextEntry && !revealed}
-          style={[styles.input, { color: colors.textPrimary }, style]}
-        />
+        {inSheet ? <BottomSheetTextInput {...inputProps} /> : <TextInput ref={inputRef} {...inputProps} />}
+        {rightAccessory}
         {secureTextEntry ? (
           <Pressable accessibilityRole="button" accessibilityLabel={revealed ? 'Hide password' : 'Show password'} hitSlop={12} onPress={() => setRevealed(!revealed)} style={styles.eye}>
-            <Feather name={revealed ? 'eye-off' : 'eye'} size={18} color={colors.textSecondary} />
+            <Feather name={revealed ? 'eye-off' : 'eye'} size={20} color={colors.textSecondary} />
           </Pressable>
         ) : null}
       </View>
@@ -49,15 +61,16 @@ export function TextField(
   );
 }
 
-export function SheetTextField(props: Omit<Props, 'inSheet'>) {
+export function SheetTextField(props: Omit<Props, 'inSheet' | 'inputRef'>) {
   return <TextField {...props} inSheet />;
 }
 
 const styles = StyleSheet.create({
   group: { gap: 8 },
-  label: { fontSize: 11, fontWeight: '700', letterSpacing: 0.7 },
+  label: { ...typography.label },
   inputRow: { borderWidth: 1, borderRadius: 14, flexDirection: 'row' },
-  input: { minHeight: 52, paddingHorizontal: 15, paddingVertical: 14, fontSize: 15, flex: 1 },
+  input: { minHeight: 52, minWidth: 0, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, flex: 1 },
+  plainInput: { paddingHorizontal: 0, paddingVertical: 0 },
   eye: { padding: 16 },
-  error: { fontSize: 12, lineHeight: 18 },
+  error: { ...typography.small },
 });

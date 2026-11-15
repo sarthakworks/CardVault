@@ -21,8 +21,14 @@ const biometricKeySchema = z.strictObject({
 
 export async function requireHardwareProtection(): Promise<void> {
   const security = await VaultSecurity.inspectWrappingKey(biometricService);
-  if (!security.hardwareBacked || !security.authenticationRequired || !security.perUseAuthentication) {
+  if (!security.hardwareBacked) {
     throw new VaultError('biometric', 'This device cannot verify hardware-backed biometric key protection. Please use your master password.');
+  }
+  if (!security.authenticationRequired) {
+    throw new VaultError('biometric', 'Hardware-enforced biometric authentication could not be verified. Please use your master password.');
+  }
+  if (!security.perUseAuthentication) {
+    throw new VaultError('biometric', 'Per-use strong biometric protection could not be verified. Please use your master password.');
   }
 }
 

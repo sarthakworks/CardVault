@@ -3,6 +3,10 @@ export function formatCardNumber(value: string): string {
   return /^\d+$/.test(digits) ? digits.match(/.{1,4}/g)?.join(' ') ?? value : value;
 }
 
+export function formatCardExpiry(value: string): string {
+  return value.replace(/^(\d{2})(\d{2}|\d{4})$/, '$1/$2');
+}
+
 export function displayDate(value: string): string {
   return new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
