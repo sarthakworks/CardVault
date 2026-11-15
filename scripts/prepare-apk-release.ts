@@ -53,7 +53,7 @@ writeFileSync(path.join(env.RUNNER_TEMP, 'apk-release-notes.md'), [
   '| 32-bit x86 | **cardvault-x86.apk** |',
   '| 64-bit x86, including x86_64 emulators | **cardvault-x86_64.apk** |',
   '',
-  'Each APK contains only its target CPU libraries and is limited to 20 MB. All four use the same app version, build number, and signing key.',
+  'Each APK contains only its target CPU libraries and is limited to 200 MB. All four use the same app version, build number, and signing key.',
   '',
   `Source: [${env.GITHUB_SHA.slice(0, 7)}](${repositoryUrl}/commit/${env.GITHUB_SHA})`,
   `Build: [GitHub Actions run](${repositoryUrl}/actions/runs/${env.GITHUB_RUN_ID})`,

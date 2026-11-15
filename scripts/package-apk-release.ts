@@ -14,17 +14,26 @@ const apkFiles = [
   ['x86', 'cardvault-x86.apk'],
   ['x86_64', 'cardvault-x86_64.apk'],
 ] as const;
-const maxApkBytes = 20_000_000;
+const maxApkBytes = 200_000_000;
+const archiveMembers = execFileSync('tar', ['-tzf', archiveFile], { encoding: 'utf8' })
+  .split('\n')
+  .filter((member) => member && !member.endsWith('/'));
 const checksums: string[] = [];
 mkdirSync(outputDirectory, { recursive: true });
 
 for (const [abi, filename] of apkFiles) {
-  const apk = execFileSync('tar', ['-xOzf', archiveFile, `app-${abi}-release.apk`], {
-    maxBuffer: 128 * 1024 * 1024,
+  const apkName = `app-${abi}-release.apk`;
+  const matches = archiveMembers.filter((member) => path.posix.basename(member) === apkName);
+  const [member] = matches;
+  if (matches.length !== 1 || member === undefined) {
+    throw new Error(`Expected exactly one ${apkName} in the APK archive; found ${matches.length}.`);
+  }
+  const apk = execFileSync('tar', ['-xOzf', archiveFile, '--', member], {
+    maxBuffer: 256 * 1024 * 1024,
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   if (apk.byteLength > maxApkBytes) {
-    throw new Error(`${filename} is ${apk.byteLength} bytes, exceeding the 20,000,000-byte APK limit.`);
+    throw new Error(`${filename} is ${apk.byteLength} bytes, exceeding the 200,000,000-byte APK limit.`);
   }
   const apkPath = path.join(outputDirectory, filename);
   writeFileSync(apkPath, apk, { flag: 'wx' });
