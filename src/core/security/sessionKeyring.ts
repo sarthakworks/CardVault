@@ -1,4 +1,4 @@
-import { VaultError } from '../errors/VaultError';
+import {VaultError} from '../errors/VaultError';
 
 let sessionKey: Uint8Array | null = null;
 
@@ -8,7 +8,8 @@ export const sessionKeyring = {
     sessionKey = new Uint8Array(key);
   },
   get(): Uint8Array {
-    if (!sessionKey) throw new VaultError('locked', 'Unlock your vault to continue.');
+    if (!sessionKey)
+      throw new VaultError('locked', 'Unlock your vault to continue.');
     return sessionKey;
   },
   clear(): void {

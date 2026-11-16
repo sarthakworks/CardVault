@@ -1,5 +1,5 @@
-import { requireNativeView, requireOptionalNativeModule } from 'expo';
-import type { ViewProps } from 'react-native';
+import {requireNativeView, requireOptionalNativeModule} from 'expo';
+import type {ViewProps} from 'react-native';
 
 export interface ReadCardDetails {
   number: string;
@@ -27,18 +27,30 @@ export interface CardCameraProps extends ViewProps {
   active: boolean;
   requestId: number;
   torch: boolean;
-  focusPoint: { x: number; y: number; request: number };
+  focusPoint: {x: number; y: number; request: number};
   enhance: boolean;
-  onText: (event: { nativeEvent: { requestId: number; lines: string[]; regions?: CameraTextRegion[]; enhanced?: boolean } }) => void;
-  onStatus: (event: { nativeEvent: {
-    requestId: number;
-    status: 'preparing' | 'ready' | 'hint' | 'error';
-    message: string;
-    torchAvailable?: boolean;
-    torchEnabled?: boolean;
-    enhancementAvailable?: boolean;
-  } }) => void;
+  onText: (event: {
+    nativeEvent: {
+      requestId: number;
+      lines: string[];
+      regions?: CameraTextRegion[];
+      enhanced?: boolean;
+    };
+  }) => void;
+  onStatus: (event: {
+    nativeEvent: {
+      requestId: number;
+      status: 'preparing' | 'ready' | 'hint' | 'error';
+      message: string;
+      torchAvailable?: boolean;
+      torchEnabled?: boolean;
+      enhancementAvailable?: boolean;
+    };
+  }) => void;
 }
 
-export const CardReader = requireOptionalNativeModule<CardReaderApi>('CardReader');
-export const CardCameraView = CardReader ? requireNativeView<CardCameraProps>('CardReader') : null;
+export const CardReader =
+  requireOptionalNativeModule<CardReaderApi>('CardReader');
+export const CardCameraView = CardReader
+  ? requireNativeView<CardCameraProps>('CardReader')
+  : null;

@@ -1,19 +1,58 @@
+import {cardBankLabel} from './cardSelectors';
+
 export type CardGradient = readonly [string, string, string];
 
 // Brand hues are approximations used only to tint card artwork; keys are whole-word phrases.
 // Order matters: more specific names must precede names they contain (e.g. "state bank of india" before "bank of india").
-const bankBrands: readonly (readonly [color: string, keys: readonly string[]])[] = [
+const bankBrands: readonly (readonly [
+  color: string,
+  keys: readonly string[],
+])[] = [
   // Public sector banks (including names merged into them)
-  ['#2D5BA8', ['state bank of india', 'sbi', 'sbi card', 'sbi cards', 'state bank']],
+  [
+    '#2D5BA8',
+    ['state bank of india', 'sbi', 'sbi card', 'sbi cards', 'state bank'],
+  ],
   ['#D2232A', ['central bank of india', 'central bank', 'cbi']],
   ['#1E4D9B', ['indian overseas bank', 'iob']],
   ['#C8202F', ['south indian bank', 'sib']],
   ['#193D8F', ['city union bank', 'cub']],
   ['#EE3524', ['bank of maharashtra', 'mahabank', 'bom']],
-  ['#E21F26', ['union bank of india', 'union bank', 'ubi', 'andhra bank', 'corporation bank']],
+  [
+    '#E21F26',
+    [
+      'union bank of india',
+      'union bank',
+      'ubi',
+      'andhra bank',
+      'corporation bank',
+    ],
+  ],
   ['#F37021', ['bank of india', 'boi']],
-  ['#F15A22', ['bank of baroda', 'baroda', 'bob', 'bob card', 'bob cards', 'bobcard', 'bobcards', 'vijaya bank', 'dena bank']],
-  ['#A2123B', ['punjab national bank', 'pnb', 'oriental bank of commerce', 'obc', 'united bank of india']],
+  [
+    '#F15A22',
+    [
+      'bank of baroda',
+      'baroda',
+      'bob',
+      'bob card',
+      'bob cards',
+      'bobcard',
+      'bobcards',
+      'vijaya bank',
+      'dena bank',
+    ],
+  ],
+  [
+    '#A2123B',
+    [
+      'punjab national bank',
+      'pnb',
+      'oriental bank of commerce',
+      'obc',
+      'united bank of india',
+    ],
+  ],
   ['#009245', ['punjab sind bank', 'punjab and sind bank', 'psb']],
   ['#0A73B8', ['canara bank', 'canara', 'syndicate bank']],
   ['#1B4F9C', ['indian bank', 'allahabad bank']],
@@ -62,7 +101,10 @@ const bankBrands: readonly (readonly [color: string, keys: readonly string[]])[]
   ['#0072CE', ['nsdl payments bank', 'nsdl']],
   // Foreign banks in India
   ['#DB0011', ['hsbc']],
-  ['#0A60A8', ['standard chartered', 'standard chartered bank', 'scb', 'stanchart']],
+  [
+    '#0A60A8',
+    ['standard chartered', 'standard chartered bank', 'scb', 'stanchart'],
+  ],
   ['#0018A8', ['deutsche bank', 'deutsche']],
   ['#016FD0', ['american express', 'amex']],
   ['#00AEEF', ['barclays', 'barclaycard']],
@@ -102,29 +144,61 @@ const bankBrands: readonly (readonly [color: string, keys: readonly string[]])[]
 const fallback: CardGradient = ['#3F5E91', '#263E65', '#162A49'];
 
 function normalize(value: string): string {
-  return ` ${value.toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim()} `;
+  return ` ${value
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()} `;
 }
 
-const brandIndex = bankBrands.flatMap(([color, keys]) => keys.map((key) => [normalize(key), color] as const));
+const brandIndex = bankBrands.flatMap(([color, keys]) =>
+  keys.map((key) => [normalize(key), color] as const)
+);
+
+function matchingBrand(bank: string) {
+  const name = normalize(bank);
+  const compact = name.replace(/ /g, '');
+  return brandIndex.find(
+    ([key]) =>
+      name.includes(key) ||
+      (!name.trim().includes(' ') &&
+        key.trim().includes(' ') &&
+        compact.startsWith(key.replace(/ /g, '')))
+  );
+}
+
+export function bankWatermark(bank: string | undefined): string {
+  const label = matchingBrand(bank ?? '')?.[0] ?? bank ?? '';
+  return cardBankLabel(label).toUpperCase() || 'BANK';
+}
 
 function channel(hex: string, offset: number): number {
   return parseInt(hex.slice(offset, offset + 2), 16) / 255;
 }
 
 function luminance([r, g, b]: number[]): number {
-  const linear = (value: number) => (value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+  const linear = (value: number) =>
+    value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
   return 0.2126 * linear(r!) + 0.7152 * linear(g!) + 0.0722 * linear(b!);
 }
 
 function toHex(rgb: number[]): string {
-  return `#${rgb.map((value) => Math.round(Math.min(1, Math.max(0, value)) * 255).toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+  return `#${rgb
+    .map((value) =>
+      Math.round(Math.min(1, Math.max(0, value)) * 255)
+        .toString(16)
+        .padStart(2, '0')
+    )
+    .join('')
+    .toUpperCase()}`;
 }
 
 // Deepen the brand colour until white card text keeps at least ~5:1 contrast, then shade towards near-black.
 function gradientFrom(color: string): CardGradient {
   let rgb = [channel(color, 1), channel(color, 3), channel(color, 5)];
   while (luminance(rgb) > 0.16) rgb = rgb.map((value) => value * 0.92);
-  const shade = (amount: number) => toHex(rgb.map((value) => value * (1 - amount) + 0.06 * amount));
+  const shade = (amount: number) =>
+    toHex(rgb.map((value) => value * (1 - amount) + 0.06 * amount));
   return [toHex(rgb), shade(0.38), shade(0.66)];
 }
 
@@ -135,8 +209,7 @@ export function bankGradient(bank: string | undefined): CardGradient {
   if (!name.trim()) return fallback;
   const cached = cache.get(name);
   if (cached) return cached;
-  const compact = name.replace(/ /g, '');
-  const match = brandIndex.find(([key]) => name.includes(key) || (!name.trim().includes(' ') && key.trim().includes(' ') && compact.startsWith(key.replace(/ /g, ''))));
+  const match = matchingBrand(bank ?? '');
   const gradient = match ? gradientFrom(match[1]) : fallback;
   cache.set(name, gradient);
   return gradient;

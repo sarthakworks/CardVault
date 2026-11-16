@@ -1,3 +1,5 @@
-import { create } from 'zustand';
+import {create} from 'zustand';
 
-export const useBackupStore = create<{ pendingUri: string | null }>(() => ({ pendingUri: null }));
+export const useBackupStore = create<{pendingUri: string | null}>(() => ({
+  pendingUri: null,
+}));

@@ -1,11 +1,18 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
-import { VaultError } from '../errors/VaultError';
+import type {SQLiteDatabase} from 'expo-sqlite';
+import {VaultError} from '../errors/VaultError';
 
 export async function migrate(database: SQLiteDatabase): Promise<void> {
-  await database.execAsync('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA secure_delete = ON;');
-  const row = await database.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
+  await database.execAsync(
+    'PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA secure_delete = ON;'
+  );
+  const row = await database.getFirstAsync<{user_version: number}>(
+    'PRAGMA user_version'
+  );
   if (row && row.user_version > 1) {
-    throw new VaultError('format', 'This vault was created by a newer version of Cardvault.');
+    throw new VaultError(
+      'format',
+      'This vault was created by a newer version of Cardvault.'
+    );
   }
   if (row?.user_version === 1) return;
   await database.withExclusiveTransactionAsync(async (transaction) => {

@@ -12,12 +12,12 @@ An Android-only, offline-first credit-card and secure-notes vault built with Exp
 
 [Download the latest ARM64 APK](https://github.com/sarthakworks/CardVault/releases/latest/download/cardvault.apk) for most modern phones, or [browse all versions on GitHub Releases](https://github.com/sarthakworks/CardVault/releases). Open a release and choose the matching APK from **Assets**. `SHA256SUMS.txt` contains a checksum for each APK.
 
-| Device CPU | Download |
-| --- | --- |
-| ARM64 (`arm64-v8a`), most modern phones | `cardvault.apk` |
-| 32-bit ARM (`armeabi-v7a`) | `cardvault-armeabi-v7a.apk` |
-| 32-bit x86 | `cardvault-x86.apk` |
-| 64-bit x86, including x86_64 emulators | `cardvault-x86_64.apk` |
+| Device CPU                              | Download                    |
+| --------------------------------------- | --------------------------- |
+| ARM64 (`arm64-v8a`), most modern phones | `cardvault.apk`             |
+| 32-bit ARM (`armeabi-v7a`)              | `cardvault-armeabi-v7a.apk` |
+| 32-bit x86                              | `cardvault-x86.apk`         |
+| 64-bit x86, including x86_64 emulators  | `cardvault-x86_64.apk`      |
 
 With a device connected over ADB, `adb shell getprop ro.product.cpu.abilist` lists its supported CPUs. Install one matching APK, not all four. All APKs share the same app version, build number, and signing key.
 
@@ -113,7 +113,7 @@ Select the phone when prompted. This builds and installs the release app with it
 - Native AES-256-GCM authenticated encryption before SQLite writes.
 - Master-password or optional strong biometric unlock when reopening a closed app; biometric setup verifies the actual hardware-backed, per-use-authenticated Keystore wrapping key.
 - No extra password/fingerprint prompts for card/note creation, edits, deletion, import merging, or ordinary settings; enabling fingerprint unlock uses Android's protected-key setup prompt.
-- Realistic card artwork, explicit secure copy/edit controls, owner/bank/network filtering, and sorting.
+- Realistic card artwork, explicit secure copy/edit controls, name-on-card/bank filters, local fuzzy search, and bank-name ordering.
 - Title-and-text-only notes, searchable paper-style grid/list views, full-screen editing, and timestamps.
 - Persistent light/dark themes, reduced-motion-aware animations, and haptics.
 - Encrypted-by-default `.vault` backups, optional password-free unencrypted export/import, file-manager saving, and sharing.
@@ -123,11 +123,15 @@ The app starts empty. There are no sample cards, preconfigured passwords, or hid
 
 ## Detailed interaction and session behavior
 
-The Cards homepage keeps the collection front and center: **All owners** and the sort control open compact dropdowns beside their buttons, not bottom sheets. **Filters** groups bank and network choices in one dropdown; **Show cards**, an outside tap, or Android Back dismisses it without ending the session. Active filters show a result count and **Reset** action.
+The Cards homepage keeps the collection front and center: **All names** and **All banks** open compact dropdowns beside their buttons, not bottom sheets. Bank options derive only from saved card bank names, with equivalent labels grouped. Cards always sort alphabetically by bank name; there is no sort or network filter control. Filters and search live only in component memory: switching apps or minimizing preserves them, while fully closing the app or process termination resets them. Backgrounding closes open menus/card actions and dismisses the keyboard without clearing selections or search text. They are never stored in preferences. Active filters/search show a result count and **Reset** action, including a clear action for empty results.
 
-Tap the **copy icon beside a card number** to copy its complete stored value; the masked number itself stays private. A normal tap on the artwork does nothing. **Press and hold**, **swipe left or right**, or use the **More** icon below a card to open **Edit card**, **Copy card number**, **Share card details**, and **Delete card**. Deleting asks for confirmation before permanently removing the card from this vault. Vertical swipes still scroll the collection. The separate **pencil icon below the card** opens its editor directly, where you can also reveal/copy the CVV or delete the card with confirmation.
+The compact search bar uses a memoized local Fuse.js index of bank, variant, name on card, tier, network, type and country. Query words can match across fields with small spelling errors; all words must match. Common bank/network aliases (AE/Amex/American Express, HSBC/Hongkong and Shanghai Banking Corporation, SBI/State Bank of India) and initials from full bank/network names are indexed without changing saved values. Unknown three-letter acronyms allow one typo only when no direct match exists; one/two-letter queries and digits are never fuzzy-matched. Card types use a tighter tolerance to distinguish credit from debit. Card-number queries use exact digit substrings, preserving leading zeros, and can be combined with text. Expiry, CVV, record IDs and timestamps are excluded from the index. Search never makes network requests or persists the query.
 
-**Share card details** opens the system app chooser with plain text containing the bank, network, cardholder, full card number, expiry, CVV/security code, and owner. There is no additional confirmation or password prompt. Holding or swiping only opens the actions menu; it never shares automatically. This text is **not an encrypted backup**: only choose an app or recipient you trust.
+Home card artwork shows the full grouped number, expiry, CVV, variant and type. The name on card sits beside the chip/contactless mark; a subtle, local bank-name watermark is decorative text, not an official logo. Height follows content instead of a scaled minimum, and long numbers/footer details can wrap. Keep your screen private.
+
+Tap the **copy icon beside a card number** to copy its complete stored value. A normal tap on the artwork does nothing. **Press and hold**, **swipe left or right**, or use the **More** icon on a card to open **Edit**, **Copy details**, **Share**, and **Delete**. Copy details includes only the bank, name on card, number, expiry and CVV, using the existing secure clipboard and expiry behavior. Deleting asks for confirmation before permanently removing the card from this vault. Vertical swipes still scroll the collection.
+
+**Share card details** opens the system app chooser with plain text containing the bank, network, name on card, full card number, expiry, CVV/security code, and any saved type, tier or country. There is no additional confirmation or password prompt. Holding or swiping only opens the actions menu; it never shares automatically. This text is **not an encrypted backup**: only choose an app or recipient you trust.
 
 On first launch, **Create your vault** keeps setup to a master password, confirmation, and one action. Choose a master password of 5-256 characters. Numbers are allowed, but the password is not restricted to digits. Longer passphrases are strongly recommended because short passwords are much easier to guess. The password is never stored, and there is no password-recovery service. Existing passwords are not shortened or changed by this minimum-length update.
 
@@ -165,9 +169,9 @@ Drafts are not written to SQLite, exported, or restored after process death. Sav
 
 #### Card-led entry and optional API auto-fill
 
-New and edited cards open a dedicated full-screen page, not a bottom sheet. A masked live card preview shows the bank, network mark, network tier directly below the mark, card type and country. The four main inputs are card number, expiry, CVV and name; Owner stays compact, and **Card details** always expands inline for bank/network/tier/type/country corrections. There are no bank/network preset chips. The expiry calendar selects month/year only; numeric entry still works. Existing-card **Card options** retains **Copy CVV** and confirmed deletion.
+New and edited cards open a dedicated full-screen page, not a bottom sheet. The live preview reuses the homepage `CardFace`, including the full grouped number, bank watermark and colors, chip/name row, variant/type, expiry, CVV and network/tier footer. It reflects current form values immediately, including saved values when editing. Empty fields use display-only placeholders (Your bank, Your name, Variant, Card type, Network, Tier, MM/YY, XXXX XXXX XXXX XXXX and XXX); form values, validation, drafts and saves never receive those placeholders. The preview has no copy or More icons, gestures or actions. The main inputs are card number, expiry, CVV and name. **Card details** expands inline for bank/network/tier/type/country corrections and an optional free-text **Variant** limited to 15 characters. Variant is user-entered, not API-autofilled, and persists with the encrypted record and both backup formats; older cards/backups without it remain valid. Validation expands the section before focusing an invalid field, including Variant. There is no separate Owner/family-relation field. There are no bank/network preset chips. The expiry calendar selects month/year only; numeric entry still works. Existing-card **Card options** retains **Copy CVV** and confirmed deletion.
 
-The preview's percentage width and maximum width are explicitly bound to its parent, independently of its font-scaled minimum height. Do not rely on `aspectRatio` plus a minimum height alone: Yoga can derive a card wider than its container on narrower logical screens or larger Android font settings. Header copy can shrink/wrap, shared button labels wrap within their controls, and the note footer wraps rather than pushing text off-screen. Keep system font scaling and safe-area handling enabled.
+Both home and preview cards use the same parent-bound percentage width and content-driven height, with no aspect ratio or scaled minimum height. Header copy and number/footer details can wrap instead of stretching the card beyond narrower screens or larger font settings. The preview omits the home card's action-control slots. Keep system font scaling and safe-area handling enabled.
 
 For local development and local native builds, create an ignored local `.env` file with this field, then fill it in locally with your HandyAPI **Publishable (Frontend) API Key**:
 
@@ -220,7 +224,7 @@ The three fields use numeric keypads and remove non-digit input; expiry inserts 
 
 Existing saved cards and imported backups remain readable, including older free-form or expired values. These new entry rules are not applied when unlocking, importing, or saving unrelated records, so an older value cannot make the vault unreadable. Saving an edit to such a card requires correcting its fields to the current entry rules. Existing grouped numeric card numbers are normalized in the editor without changing their digits.
 
-Storage-size safeguards for legacy/imported records remain: card numbers support up to 128 characters, and expiry/security-code values support up to 32 characters each. Expiry sorting recognizes compact numeric dates and MM/YY or MM/YYYY values, keeping other text afterward.
+Storage-size safeguards for legacy/imported records remain: card numbers support up to 128 characters, and expiry/security-code values support up to 32 characters each.
 
 Saving a card writes it directly to the encrypted vault without a password or fingerprint confirmation.
 
@@ -248,6 +252,27 @@ Uninstalling the app deletes its local database and biometric access. Export reg
 
 ## Validation
 
+### Code formatting
+
+Prettier handles formatting; ESLint remains responsible for code quality. The
+pinned development dependency uses single quotes and two-space indentation.
+
+```sh
+npm run format        # Rewrite supported files across the repository
+npm run format:check  # Check formatting without changing files
+```
+
+For a focused change, run `npx prettier --write path/to/file.tsx` instead.
+Editors with Prettier support can use the repository's `.prettierrc.json`.
+Generated native projects, builds, dependencies, caches, coverage, the npm
+lockfile, and private local environment files are excluded by `.prettierignore`.
+
+Existing source has not been bulk-formatted, so `format:check` may report
+pre-existing differences. Formatting is not a full-tree CI gate; keep formatting
+migrations separate from behavioral changes.
+
+### Code quality and builds
+
 ```sh
 npm run typecheck
 npm run lint
@@ -256,7 +281,11 @@ npm run build
 npm run build:android
 ```
 
-As requested, there are no authored unit/integration/E2E test cases or test-framework dependencies. `npm test` is explicitly an alias for TypeScript validation, not a runtime test suite.
+`npm test` is an alias for TypeScript validation, not a runtime test suite. Focused card-presentation/schema and release-packaging checks use Node's built-in runner without a test-framework dependency:
+
+```sh
+node --import tsx --test scripts/card-presentation.test.ts scripts/package-apk-release.test.ts
+```
 
 The native module is maintained under `modules/vault-security`. The generated `android` project is not the source of truth; `app.config.ts` and the config plugin regenerate it. The plugin fails explicitly if the expected Kotlin startup hook cannot be secured.
 

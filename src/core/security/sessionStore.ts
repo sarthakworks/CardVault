@@ -1,9 +1,9 @@
-import { create } from 'zustand';
-import type { EnvelopeHeader } from '../crypto/envelope';
-import type { CardInput, NoteInput, VaultSnapshot } from '../vault/models';
-import { VaultError } from '../errors/VaultError';
-import { sessionKeyring } from './sessionKeyring';
-import type { CardDetailField } from '../validation/cardRules';
+import {create} from 'zustand';
+import type {EnvelopeHeader} from '../crypto/envelope';
+import type {CardInput, NoteInput, VaultSnapshot} from '../vault/models';
+import {VaultError} from '../errors/VaultError';
+import {sessionKeyring} from './sessionKeyring';
+import type {CardDetailField} from '../validation/cardRules';
 
 export type CardAutofillField = CardDetailField;
 export interface CardAutofillState {
@@ -12,8 +12,8 @@ export interface CardAutofillState {
 }
 
 type SessionDraft =
-  | { kind: 'card'; values: CardInput; autofill?: CardAutofillState }
-  | { kind: 'note'; values: NoteInput };
+  | {kind: 'card'; values: CardInput; autofill?: CardAutofillState}
+  | {kind: 'note'; values: NoteInput};
 
 interface SessionState {
   status: 'booting' | 'setup' | 'locked' | 'unlocked' | 'failed';
@@ -35,31 +35,53 @@ export const useSessionStore = create<SessionState>(() => ({
   drafts: {},
 }));
 
-export function keepSessionDraft(key: string, draft: SessionDraft, generation: number): void {
+export function keepSessionDraft(
+  key: string,
+  draft: SessionDraft,
+  generation: number
+): void {
   useSessionStore.setState((state) => {
-    if (state.status !== 'unlocked' || state.generation !== generation) return state;
-    const copy: SessionDraft = draft.kind === 'card'
-      ? {
-        kind: 'card', values: { ...draft.values },
-        ...(draft.autofill ? { autofill: { manualFields: [...draft.autofill.manualFields], automaticFields: [...draft.autofill.automaticFields] } } : {}),
-      }
-      : { kind: 'note', values: { ...draft.values } };
-    return { drafts: { ...state.drafts, [key]: copy } };
+    if (state.status !== 'unlocked' || state.generation !== generation)
+      return state;
+    const copy: SessionDraft =
+      draft.kind === 'card'
+        ? {
+            kind: 'card',
+            values: {...draft.values},
+            ...(draft.autofill
+              ? {
+                  autofill: {
+                    manualFields: [...draft.autofill.manualFields],
+                    automaticFields: [...draft.autofill.automaticFields],
+                  },
+                }
+              : {}),
+          }
+        : {kind: 'note', values: {...draft.values}};
+    return {drafts: {...state.drafts, [key]: copy}};
   });
 }
 
 export function discardSessionDraft(key: string, generation: number): void {
   useSessionStore.setState((state) => {
-    if (state.status !== 'unlocked' || state.generation !== generation || !(key in state.drafts)) return state;
-    const drafts = { ...state.drafts };
+    if (
+      state.status !== 'unlocked' ||
+      state.generation !== generation ||
+      !(key in state.drafts)
+    )
+      return state;
+    const drafts = {...state.drafts};
     delete drafts[key];
-    return { drafts };
+    return {drafts};
   });
 }
 
 export function assertGeneration(generation: number): void {
   if (useSessionStore.getState().generation !== generation) {
-    throw new VaultError('locked', 'Your vault locked. Unlock it to try again.');
+    throw new VaultError(
+      'locked',
+      'Your vault locked. Unlock it to try again.'
+    );
   }
 }
 
@@ -68,5 +90,10 @@ export function activeSession() {
   if (state.status !== 'unlocked' || !state.header || !state.snapshot) {
     throw new VaultError('locked', 'Unlock your vault to continue.');
   }
-  return { ...state, header: state.header, snapshot: state.snapshot, key: sessionKeyring.get() };
+  return {
+    ...state,
+    header: state.header,
+    snapshot: state.snapshot,
+    key: sessionKeyring.get(),
+  };
 }

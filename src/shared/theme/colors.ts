@@ -16,7 +16,7 @@ const light = {
   scrim: '#10121699',
 } as const;
 
-export type ThemeColors = { [Key in keyof typeof light]: string };
+export type ThemeColors = {[Key in keyof typeof light]: string};
 
 const dark: ThemeColors = {
   background: '#101216',
@@ -36,4 +36,4 @@ const dark: ThemeColors = {
   scrim: '#000000B3',
 };
 
-export const palettes = { light, dark };
+export const palettes = {light, dark};

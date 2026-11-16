@@ -1,8 +1,17 @@
-import { create } from 'zustand';
-import { z } from 'zod';
-import { readPreference, writePreference } from '../../core/storage/preferencesRepository';
-import { activeSession, assertGeneration } from '../../core/security/sessionStore';
-import { disableBiometricUnlock, enableBiometricUnlock } from '../../core/security/biometricKeyStore';
+import {create} from 'zustand';
+import {z} from 'zod';
+import {
+  readPreference,
+  writePreference,
+} from '../../core/storage/preferencesRepository';
+import {
+  activeSession,
+  assertGeneration,
+} from '../../core/security/sessionStore';
+import {
+  disableBiometricUnlock,
+  enableBiometricUnlock,
+} from '../../core/security/biometricKeyStore';
 
 export type ThemeMode = 'light' | 'dark';
 interface SettingsState {
@@ -18,17 +27,23 @@ export const useSettingsStore = create<SettingsState>(() => ({
 }));
 
 export async function refreshSettings(): Promise<void> {
-  const [theme, biometrics] = await Promise.all([readPreference('theme'), readPreference('biometrics')]);
+  const [theme, biometrics] = await Promise.all([
+    readPreference('theme'),
+    readPreference('biometrics'),
+  ]);
   useSettingsStore.setState({
     theme: theme === null ? 'light' : z.enum(['light', 'dark']).parse(theme),
-    biometricsEnabled: biometrics === null ? false : z.enum(['true', 'false']).parse(biometrics) === 'true',
+    biometricsEnabled:
+      biometrics === null
+        ? false
+        : z.enum(['true', 'false']).parse(biometrics) === 'true',
     ready: true,
   });
 }
 
 export async function changeTheme(theme: ThemeMode): Promise<void> {
   await writePreference('theme', theme);
-  useSettingsStore.setState({ theme });
+  useSettingsStore.setState({theme});
 }
 
 export async function changeFingerprintUnlock(enabled: boolean): Promise<void> {
@@ -36,7 +51,11 @@ export async function changeFingerprintUnlock(enabled: boolean): Promise<void> {
   if (enabled) {
     const key = new Uint8Array(session.key);
     try {
-      await enableBiometricUnlock(session.header.vaultId, key, session.generation);
+      await enableBiometricUnlock(
+        session.header.vaultId,
+        key,
+        session.generation
+      );
     } finally {
       key.fill(0);
     }

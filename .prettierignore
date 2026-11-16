@@ -1,0 +1,26 @@
+# Dependencies and lockfiles
+node_modules/
+package-lock.json
+.worktrees/
+
+# Generated native projects, builds, caches, and coverage
+**/android/
+**/ios/
+.expo/
+expo-env.d.ts
+dist/
+web-build/
+build/
+builds/
+.cache/
+.gradle/
+.kotlin/
+.metro-health-check*
+coverage/
+*.tsbuildinfo
+
+# Private local configuration and vault exports
+.env
+.env.*
+credentials.json
+*.vault

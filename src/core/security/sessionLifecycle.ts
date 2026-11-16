@@ -1,8 +1,8 @@
-import { AppState, BackHandler } from 'react-native';
+import {AppState, BackHandler} from 'react-native';
 import VaultSecurity from '../../../modules/vault-security';
-import { sessionKeyring } from './sessionKeyring';
-import { useSessionStore } from './sessionStore';
-import { reportError } from '../errors/noticeStore';
+import {sessionKeyring} from './sessionKeyring';
+import {useSessionStore} from './sessionStore';
+import {reportError} from '../errors/noticeStore';
 
 export function lockSession(): void {
   sessionKeyring.clear();

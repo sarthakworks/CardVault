@@ -1,9 +1,12 @@
-import { z } from 'zod';
-import { headerSchema, sealedSchema } from '../../core/crypto/envelope';
-import { snapshotSchema } from '../../core/vault/schemas';
+import {z} from 'zod';
+import {headerSchema, sealedSchema} from '../../core/crypto/envelope';
+import {snapshotSchema} from '../../core/vault/schemas';
 
 export const backupSchema = z.strictObject({
-  header: headerSchema.refine((header) => header.purpose === 'backup', 'Choose a Cardvault backup, not a local database.'),
+  header: headerSchema.refine(
+    (header) => header.purpose === 'backup',
+    'Choose a Cardvault backup, not a local database.'
+  ),
   ciphertext: sealedSchema,
 });
 
@@ -13,5 +16,8 @@ export const unencryptedBackupSchema = z.strictObject({
   snapshot: snapshotSchema,
 });
 
-export const backupFileSchema = z.union([backupSchema, unencryptedBackupSchema]);
+export const backupFileSchema = z.union([
+  backupSchema,
+  unencryptedBackupSchema,
+]);
 export type BackupFile = z.infer<typeof backupFileSchema>;

@@ -12,14 +12,18 @@ export interface BackupDocumentInfo {
 }
 
 export interface VaultSecurityApi {
-  addListener(event: 'onAppClosed', listener: () => void): { remove(): void };
+  addListener(event: 'onAppClosed', listener: () => void): {remove(): void};
   getActivitySessionId(): number;
   releasePrivacyShield(): Promise<void>;
   armClipboardExpiry(hash: string): Promise<void>;
   clearOwnedClipboard(): Promise<void>;
   inspectWrappingKey(service: string): Promise<WrappingKeySecurity>;
   isWindowFocused(): boolean;
-  deriveRootKey(password: string, salt: string, iterations: number): Promise<string>;
+  deriveRootKey(
+    password: string,
+    salt: string,
+    iterations: number
+  ): Promise<string>;
   createBackupDocument(name: string): Promise<string | null>;
   rememberBackupDocument(uri: string): Promise<BackupDocumentInfo>;
 }

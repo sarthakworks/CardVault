@@ -6,7 +6,7 @@ import {
   withMainActivity,
   withDangerousMod,
 } from 'expo/config-plugins';
-import { mkdir, writeFile } from 'node:fs/promises';
+import {mkdir, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 
 const binEnvironmentInputs = `// Cardvault BIN lookup bundle inputs.
@@ -26,21 +26,29 @@ tasks.withType(com.facebook.react.tasks.BundleHermesCTask).configureEach {
 const withAndroidSecurity: ConfigPlugin = (config) => {
   config = withAndroidManifest(config, (mod) => {
     const internet = 'android.permission.INTERNET';
-    if (mod.android?.permissions?.includes(internet) && !mod.android.blockedPermissions?.includes(internet)) {
+    if (
+      mod.android?.permissions?.includes(internet) &&
+      !mod.android.blockedPermissions?.includes(internet)
+    ) {
       // Remove the old offline build's tools:node="remove" marker during incremental prebuilds.
       AndroidConfig.Permissions.removePermissions(mod.modResults, [internet]);
       AndroidConfig.Permissions.ensurePermissions(mod.modResults, [internet]);
     }
     const application = mod.modResults.manifest.application?.[0];
-    if (!application) throw new Error('Android application manifest is missing.');
+    if (!application)
+      throw new Error('Android application manifest is missing.');
     application.$['android:allowBackup'] = 'false';
     application.$['android:usesCleartextTraffic'] = 'false';
     application.$['android:fullBackupContent'] = 'false';
-    application.$['android:dataExtractionRules'] = '@xml/vault_data_extraction_rules';
+    application.$['android:dataExtractionRules'] =
+      '@xml/vault_data_extraction_rules';
     return mod;
   });
   config = withAppBuildGradle(config, (mod) => {
-    if (mod.modResults.language !== 'groovy') throw new Error('Cardvault BIN environment inputs require a Groovy app build.gradle.');
+    if (mod.modResults.language !== 'groovy')
+      throw new Error(
+        'Cardvault BIN environment inputs require a Groovy app build.gradle.'
+      );
     if (!mod.modResults.contents.includes(binEnvironmentInputs)) {
       mod.modResults.contents = `${mod.modResults.contents.trimEnd()}\n\n${binEnvironmentInputs}\n`;
     }
@@ -54,12 +62,15 @@ const withAndroidSecurity: ConfigPlugin = (config) => {
     if (source.includes('PrivacyController.attach(this)')) return mod;
     source = source.replace(
       'import android.os.Bundle',
-      'import android.os.Bundle\nimport android.view.WindowManager\nimport com.cardvault.security.PrivacyController',
+      'import android.os.Bundle\nimport android.view.WindowManager\nimport com.cardvault.security.PrivacyController'
     );
     const createCall = /super\.onCreate\((?:null|savedInstanceState)\)/;
-    if (!createCall.test(source)) throw new Error('Cannot secure MainActivity startup.');
-    source = source.replace(createCall,
-      'window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)\n    super.onCreate(null)\n    PrivacyController.attach(this)');
+    if (!createCall.test(source))
+      throw new Error('Cannot secure MainActivity startup.');
+    source = source.replace(
+      createCall,
+      'window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)\n    super.onCreate(null)\n    PrivacyController.attach(this)'
+    );
     const closingBrace = source.lastIndexOf('}');
     if (closingBrace < 0) throw new Error('Invalid MainActivity structure.');
     source = `${source.slice(0, closingBrace)}
@@ -81,15 +92,34 @@ ${source.slice(closingBrace)}`;
     mod.modResults.contents = source;
     return mod;
   });
-  return withDangerousMod(config, ['android', async (mod) => {
-    const folder = path.join(mod.modRequest.platformProjectRoot, 'app/src/main/res/xml');
-    await mkdir(folder, { recursive: true });
-    const exclusions = ['root', 'file', 'database', 'sharedpref', 'external', 'device_root', 'device_file', 'device_database', 'device_sharedpref']
-      .map((domain) => `<exclude domain="${domain}" path="."/>`).join('');
-    await writeFile(path.join(folder, 'vault_data_extraction_rules.xml'),
-      `<data-extraction-rules><cloud-backup disableIfNoEncryptionCapabilities="true">${exclusions}</cloud-backup><device-transfer>${exclusions}</device-transfer></data-extraction-rules>`);
-    return mod;
-  }]);
+  return withDangerousMod(config, [
+    'android',
+    async (mod) => {
+      const folder = path.join(
+        mod.modRequest.platformProjectRoot,
+        'app/src/main/res/xml'
+      );
+      await mkdir(folder, {recursive: true});
+      const exclusions = [
+        'root',
+        'file',
+        'database',
+        'sharedpref',
+        'external',
+        'device_root',
+        'device_file',
+        'device_database',
+        'device_sharedpref',
+      ]
+        .map((domain) => `<exclude domain="${domain}" path="."/>`)
+        .join('');
+      await writeFile(
+        path.join(folder, 'vault_data_extraction_rules.xml'),
+        `<data-extraction-rules><cloud-backup disableIfNoEncryptionCapabilities="true">${exclusions}</cloud-backup><device-transfer>${exclusions}</device-transfer></data-extraction-rules>`
+      );
+      return mod;
+    },
+  ]);
 };
 
 export default withAndroidSecurity;

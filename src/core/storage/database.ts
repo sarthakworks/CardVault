@@ -1,5 +1,5 @@
-import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
-import { migrate } from './migrations';
+import {openDatabaseAsync, type SQLiteDatabase} from 'expo-sqlite';
+import {migrate} from './migrations';
 
 let connection: Promise<SQLiteDatabase> | undefined;
 
@@ -9,7 +9,9 @@ export function getDatabase(): Promise<SQLiteDatabase> {
       await migrate(database);
       return database;
     });
-    connection.catch(() => { connection = undefined; });
+    connection.catch(() => {
+      connection = undefined;
+    });
   }
   return connection;
 }

@@ -1,5 +1,11 @@
-import type { z } from 'zod';
-import type { cardInputSchema, cardSchema, noteFieldsSchema, noteSchema, snapshotSchema } from './schemas';
+import type {z} from 'zod';
+import type {
+  cardInputSchema,
+  cardSchema,
+  noteFieldsSchema,
+  noteSchema,
+  snapshotSchema,
+} from './schemas';
 
 export type VaultCard = z.infer<typeof cardSchema>;
 export type CardInput = z.infer<typeof cardInputSchema>;

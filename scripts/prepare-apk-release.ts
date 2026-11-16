@@ -1,65 +1,85 @@
-import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+import {appendFileSync, readFileSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
-import { z } from 'zod';
+import {z} from 'zod';
 
 const commitHash = z.string().regex(/^[0-9a-f]{40}$/);
-const httpsUrl = z.string().regex(/^https:\/\/\S+$/).url();
-const env = z.object({
-  GITHUB_SHA: commitHash,
-  GITHUB_REPOSITORY: z.string().regex(/^[\w.-]+\/[\w.-]+$/),
-  GITHUB_SERVER_URL: httpsUrl,
-  GITHUB_RUN_ID: z.string().regex(/^[1-9]\d*$/),
-  GITHUB_OUTPUT: z.string().min(1),
-  RUNNER_TEMP: z.string().min(1),
-}).parse(process.env);
+const httpsUrl = z
+  .string()
+  .regex(/^https:\/\/\S+$/)
+  .url();
+const env = z
+  .object({
+    GITHUB_SHA: commitHash,
+    GITHUB_REPOSITORY: z.string().regex(/^[\w.-]+\/[\w.-]+$/),
+    GITHUB_SERVER_URL: httpsUrl,
+    GITHUB_RUN_ID: z.string().regex(/^[1-9]\d*$/),
+    GITHUB_OUTPUT: z.string().min(1),
+    RUNNER_TEMP: z.string().min(1),
+  })
+  .parse(process.env);
 const buildFile = z.string().min(1).parse(process.argv[2]);
-const [build] = z.tuple([z.object({
-  status: z.literal('FINISHED'),
-  platform: z.literal('ANDROID'),
-  buildProfile: z.literal('release'),
-  gitCommitHash: commitHash,
-  appVersion: z.string().regex(/^\d+\.\d+\.\d+$/),
-  appBuildVersion: z.string().regex(/^[1-9]\d*$/)
-    .transform(Number).pipe(z.number().int().max(2_100_000_000)),
-  artifacts: z.object({
-    buildUrl: httpsUrl,
-    buildArtifactsUrl: httpsUrl,
-  }),
-})]).parse(JSON.parse(readFileSync(buildFile, 'utf8')));
+const [build] = z
+  .tuple([
+    z.object({
+      status: z.literal('FINISHED'),
+      platform: z.literal('ANDROID'),
+      buildProfile: z.literal('release'),
+      gitCommitHash: commitHash,
+      appVersion: z.string().regex(/^\d+\.\d+\.\d+$/),
+      appBuildVersion: z
+        .string()
+        .regex(/^[1-9]\d*$/)
+        .transform(Number)
+        .pipe(z.number().int().max(2_100_000_000)),
+      artifacts: z.object({
+        buildUrl: httpsUrl,
+        buildArtifactsUrl: httpsUrl,
+      }),
+    }),
+  ])
+  .parse(JSON.parse(readFileSync(buildFile, 'utf8')));
 
 if (build.gitCommitHash !== env.GITHUB_SHA) {
-  throw new Error('The EAS APK was built from a different commit; refusing to publish it.');
+  throw new Error(
+    'The EAS APK was built from a different commit; refusing to publish it.'
+  );
 }
 
 const tag = `v${build.appVersion}-build.${build.appBuildVersion}`;
-appendFileSync(env.GITHUB_OUTPUT, [
-  `tag=${tag}`,
-  `version=${build.appVersion}`,
-  `build_number=${build.appBuildVersion}`,
-  `artifacts_url=${build.artifacts.buildArtifactsUrl}`,
-  '',
-].join('\n'));
+appendFileSync(
+  env.GITHUB_OUTPUT,
+  [
+    `tag=${tag}`,
+    `version=${build.appVersion}`,
+    `build_number=${build.appBuildVersion}`,
+    `artifacts_url=${build.artifacts.buildArtifactsUrl}`,
+    '',
+  ].join('\n')
+);
 
 const repositoryUrl = `${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}`;
-writeFileSync(path.join(env.RUNNER_TEMP, 'apk-release-notes.md'), [
-  `Cardvault **${build.appVersion}**, Android build **${build.appBuildVersion}**.`,
-  '',
-  'Choose one standalone APK for your Android 10+ device. Expo Go and a development server are not required.',
-  '',
-  '| Device CPU | APK |',
-  '| --- | --- |',
-  '| ARM64, most modern phones | **cardvault.apk** |',
-  '| 32-bit ARM | **cardvault-armeabi-v7a.apk** |',
-  '| 32-bit x86 | **cardvault-x86.apk** |',
-  '| 64-bit x86, including x86_64 emulators | **cardvault-x86_64.apk** |',
-  '',
-  'Each APK contains only its target CPU libraries and is limited to 200 MB. All four use the same app version, build number, and signing key.',
-  '',
-  `Source: [${env.GITHUB_SHA.slice(0, 7)}](${repositoryUrl}/commit/${env.GITHUB_SHA})`,
-  `Build: [GitHub Actions run](${repositoryUrl}/actions/runs/${env.GITHUB_RUN_ID})`,
-  '',
-  '**Back up before changing versions.** Android can reject downgrades or updates signed by another key. Uninstalling deletes the local vault; export an encrypted backup first.',
-  '',
-  'To verify your APK, compare its SHA-256 digest with its entry in **SHA256SUMS.txt**. Run `sha256sum cardvault.apk` (Linux) or `shasum -a 256 cardvault.apk` (macOS), substituting your chosen APK filename.',
-  '',
-].join('\n'));
+writeFileSync(
+  path.join(env.RUNNER_TEMP, 'apk-release-notes.md'),
+  [
+    `Cardvault **${build.appVersion}**, Android build **${build.appBuildVersion}**.`,
+    '',
+    'Choose one standalone APK for your Android 10+ device. Expo Go and a development server are not required.',
+    '',
+    '| Device CPU | APK |',
+    '| --- | --- |',
+    '| ARM64, most modern phones | **cardvault.apk** |',
+    '| 32-bit ARM | **cardvault-armeabi-v7a.apk** |',
+    '| 32-bit x86 | **cardvault-x86.apk** |',
+    '| 64-bit x86, including x86_64 emulators | **cardvault-x86_64.apk** |',
+    '',
+    'Each APK contains only its target CPU libraries and is limited to 200 MB. All four use the same app version, build number, and signing key.',
+    '',
+    `Source: [${env.GITHUB_SHA.slice(0, 7)}](${repositoryUrl}/commit/${env.GITHUB_SHA})`,
+    `Build: [GitHub Actions run](${repositoryUrl}/actions/runs/${env.GITHUB_RUN_ID})`,
+    '',
+    '**Back up before changing versions.** Android can reject downgrades or updates signed by another key. Uninstalling deletes the local vault; export an encrypted backup first.',
+    '',
+    'To verify your APK, compare its SHA-256 digest with its entry in **SHA256SUMS.txt**. Run `sha256sum cardvault.apk` (Linux) or `shasum -a 256 cardvault.apk` (macOS), substituting your chosen APK filename.',
+    '',
+  ].join('\n')
+);

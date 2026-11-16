@@ -1,7 +1,7 @@
-import type { VaultCard } from '../../core/vault/models';
-import { vaultService } from '../../core/vault/vaultService';
-import { notify } from '../../core/errors/noticeStore';
-import { useConfirmation } from '../../shared/components/ConfirmationProvider';
+import type {VaultCard} from '../../core/vault/models';
+import {vaultService} from '../../core/vault/vaultService';
+import {notify} from '../../core/errors/noticeStore';
+import {useConfirmation} from '../../shared/components/ConfirmationProvider';
 
 export function useCardRemoval() {
   const confirm = useConfirmation();

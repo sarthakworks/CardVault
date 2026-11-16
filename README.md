@@ -30,7 +30,15 @@ Camera scanning needs camera permission, Google Play services, and an internet c
 
 Cardvault can look up the first eight digits of a card number to suggest its bank, network, and other details. Review the suggestions and correct anything under **Card details**. You can always enter everything yourself, including when offline.
 
-Use the copy icon beside a card number to copy it. Use **More** for sharing or deletion; deletion asks for confirmation. Filter by name on card, bank, or network, and change the sort order to find a card quickly.
+Use the copy icon beside a card number to copy it. Use **More** for sharing or deletion; deletion asks for confirmation. Tap outside an open action panel to slide the card back into place, whether it was swiped left or right. Cards always sort by bank name. **All names** and **All banks** filter the saved collection; the bank list contains only banks on your saved cards. Filters and search stay in memory while switching apps or minimizing, and reset when the app fully closes or its process ends. They are never saved to disk.
+
+Search cards locally by bank, variant, name on card, tier, network, type, country or card number (including the last four digits). Combine words such as **fedral scapia credit**; text search tolerates small spelling mistakes. Common bank/network aliases also work, such as **AE/Amex**, **HSBC**, and **SBI**. Number matching is exact, and expiry, CVV and record timestamps are never searched.
+
+Saved cards show their full number, expiry, CVV, and card type on the artwork. Expand **Card details** when creating or editing a card to add an optional **Variant** (up to 15 characters, such as Scapia, IOCL, or Flipkart); it appears beside the type. The name on card sits beside the chip.
+
+The add/edit preview uses the same card design and updates as you type. Empty fields show placeholders such as **Your bank**, **MM/YY**, or **XXX**; placeholders are never saved. The preview has no copy or More icons. On the add screen, **Clear All** or the preview's bin icon clears every field and discards the draft without saving a card.
+
+Use **More > Copy details** to copy only the number, CVV, expiry date, name on card, and bank. This uses the same protected, expiring clipboard as number-only copying. Keep your screen and clipboard private when viewing or copying card details.
 
 Going Back from the card editor keeps an unsaved draft only while the app stays open. Save before closing the app.
 
